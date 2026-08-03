@@ -1,0 +1,805 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>EntrenoMassa</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<style>
+  :root{
+    --bg:#0a0b0f; --card:#14161c; --surface:#1a1d24; --border:#262a33;
+    --text:#f0f0f0; --muted:#8b8f9a;
+    --accent:#3ddc97; --accent2:#3ddc97; --accent3:#5aa9ff;
+    --danger:#ef4444; --yellow:#eab308; --green:#3ddc97;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;padding-bottom:80px;}
+  h1,h2,h3,.num-font{font-family:'Bebas Neue',sans-serif;letter-spacing:.5px;}
+  button{font-family:inherit;cursor:pointer;}
+  input,select{font-family:inherit;}
+  .hidden{display:none !important;}
+
+  /* AUTH */
+  #authScreen{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;}
+  #authScreen h1{font-size:2.4rem;color:var(--accent);margin-bottom:4px;}
+  #authScreen p{color:var(--muted);font-size:.85rem;margin-bottom:24px;}
+  .auth-box{width:100%;max-width:340px;background:var(--card);border:1px solid var(--border);border-radius:14px;padding:20px;}
+  .auth-box input{width:100%;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:10px 12px;font-size:.85rem;margin-bottom:10px;outline:none;}
+  .auth-box input:focus{border-color:var(--accent);}
+  .auth-btn{width:100%;background:var(--accent);color:#000;border:none;border-radius:8px;padding:11px;font-weight:700;font-size:.85rem;margin-top:4px;}
+  .auth-toggle{text-align:center;margin-top:14px;font-size:.78rem;color:var(--muted);}
+  .auth-toggle span{color:var(--accent3);cursor:pointer;}
+  .auth-error{color:var(--danger);font-size:.78rem;margin-top:8px;text-align:center;}
+
+  /* TOP BAR */
+  #topbar{display:flex;align-items:center;justify-content:space-between;padding:16px 16px 10px;}
+  #topbar h1{font-size:1.5rem;color:var(--accent);}
+  #userChip{display:flex;align-items:center;gap:8px;font-size:.75rem;color:var(--muted);cursor:pointer;}
+  #userAvatar{width:28px;height:28px;border-radius:50%;background:var(--accent);color:#000;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.8rem;}
+
+  /* TABS */
+  #tabbar{display:flex;position:fixed;bottom:0;left:0;right:0;background:var(--card);border-top:1px solid var(--border);z-index:50;}
+  .tab-btn{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;padding:10px 0 8px;background:none;border:none;color:var(--muted);font-size:.66rem;}
+  .tab-btn .ic{font-size:1.15rem;}
+  .tab-btn.active{color:var(--accent);}
+  .tab-panel{display:none;padding:0 16px 16px;}
+  .tab-panel.active{display:block;}
+
+  .empty-state{text-align:center;padding:40px 20px;color:var(--muted);font-size:.85rem;}
+  .empty-state .big{font-size:2rem;margin-bottom:8px;}
+
+  /* DAYS */
+  .day-card{background:var(--card);border:1px solid var(--border);border-radius:12px;margin-bottom:12px;overflow:hidden;}
+  .day-head{display:flex;align-items:center;gap:10px;padding:14px;}
+  .day-type-badge{font-size:1.1rem;}
+  .day-name{flex:1;font-weight:700;font-size:.95rem;}
+  .day-count{font-size:.68rem;color:var(--muted);}
+  .day-actions{display:flex;gap:4px;}
+  .icon-btn{background:none;border:1px solid var(--border);color:var(--muted);border-radius:7px;width:30px;height:30px;font-size:.85rem;display:flex;align-items:center;justify-content:center;}
+  .icon-btn:hover{border-color:var(--accent3);color:var(--accent3);}
+  .day-body{padding:0 14px 14px;display:none;border-top:1px solid var(--border);}
+  .day-body.open{display:block;padding-top:12px;}
+  .mark-done-btn{width:100%;background:var(--green);color:#000;border:none;border-radius:8px;padding:10px;font-weight:700;font-size:.8rem;margin-top:10px;}
+  .mark-done-btn.done{background:var(--surface);color:var(--green);border:1px solid var(--green);}
+
+  /* EXERCISES */
+  .ex-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;margin-bottom:8px;}
+  .ex-head{display:flex;align-items:center;gap:10px;padding:11px 12px;cursor:pointer;}
+  .ex-thumb{width:36px;height:36px;border-radius:8px;object-fit:cover;flex-shrink:0;background:var(--card);}
+  .ex-name{font-size:.85rem;font-weight:600;flex:1;}
+  .ex-meta{font-size:.68rem;color:var(--muted);}
+  .ex-detail{display:none;padding:0 12px 12px;}
+  .ex-detail.open{display:block;}
+  .ex-gif{width:100%;max-width:200px;border-radius:8px;display:block;margin:6px auto 10px;}
+  .cues-box{font-size:.75rem;color:var(--muted);line-height:1.5;background:var(--card);border-radius:8px;padding:10px;margin-bottom:10px;}
+  .cues-box li{margin-left:16px;margin-bottom:3px;}
+  .set-row{display:grid;grid-template-columns:28px 1fr 1fr 34px;gap:6px;align-items:center;margin-bottom:6px;}
+  .set-row input{background:var(--card);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:7px 6px;font-size:.8rem;text-align:center;}
+  .set-num{font-size:.75rem;color:var(--muted);text-align:center;}
+  .set-save{background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--muted);width:34px;height:32px;font-size:.85rem;}
+  .set-save.saved{color:var(--green);border-color:var(--green);}
+  .set-hint{font-size:.62rem;color:var(--muted);text-align:center;margin-bottom:6px;}
+  .ex-row-btns{display:flex;gap:6px;margin-top:8px;}
+  .ex-btn-sm{flex:1;background:var(--card);border:1px solid var(--border);color:var(--text);border-radius:7px;padding:8px;font-size:.72rem;}
+  .ex-btn-sm.timer{border-color:var(--accent3);color:var(--accent3);}
+  .ex-btn-sm.danger{border-color:var(--danger);color:var(--danger);}
+
+  .add-btn{width:100%;background:none;border:1px dashed var(--border);color:var(--muted);border-radius:10px;padding:11px;font-size:.8rem;margin-top:4px;}
+  .add-btn:hover{border-color:var(--accent3);color:var(--accent3);}
+
+  /* OVERLAYS (sheets) */
+  .sheet-overlay{display:none;position:fixed;inset:0;z-index:998;background:rgba(10,11,15,.92);align-items:flex-end;justify-content:center;}
+  .sheet-overlay.show{display:flex;}
+  .sheet{width:100%;max-width:480px;max-height:88vh;overflow-y:auto;background:var(--card);border-radius:18px 18px 0 0;padding:18px;}
+  .sheet-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;}
+  .sheet-head h3{font-size:1.1rem;}
+  .sheet input,.sheet select{width:100%;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:10px 12px;font-size:.85rem;margin-bottom:8px;outline:none;}
+  .sheet-btn{width:100%;background:var(--accent);color:#000;border:none;border-radius:8px;padding:10px;font-weight:700;font-size:.82rem;}
+  .type-pick{display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;}
+  .type-pick button{flex:1;min-width:70px;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:8px 4px;font-size:.72rem;color:var(--muted);}
+  .type-pick button.active{border-color:var(--accent);color:var(--accent);}
+
+  .exdb-card{display:flex;gap:10px;padding:10px;border:1px solid var(--border);border-radius:10px;margin-bottom:8px;align-items:center;cursor:pointer;background:var(--surface);}
+  .exdb-card:hover{border-color:var(--accent3);}
+  .exdb-thumb{width:48px;height:48px;border-radius:8px;object-fit:cover;flex-shrink:0;background:var(--card);}
+  .exdb-name{font-size:.8rem;font-weight:600;}
+  .exdb-meta{font-size:.66rem;color:var(--muted);}
+  .exdb-add{background:var(--accent);color:#000;border:none;border-radius:7px;width:30px;height:30px;font-weight:700;flex-shrink:0;}
+
+  /* TIMER */
+  #timerOverlay{display:none;position:fixed;inset:0;z-index:999;background:var(--bg);flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center;}
+  #timerOverlay.show{display:flex;}
+  #timerExName{font-size:1.1rem;font-weight:700;margin-bottom:4px;}
+  .timer-badge{display:inline-block;padding:4px 12px;border-radius:20px;font-size:.7rem;font-weight:700;margin-bottom:18px;}
+  .timer-badge.work{background:rgba(61,220,151,.15);color:var(--green);}
+  .timer-badge.rest{background:rgba(90,169,255,.15);color:var(--accent3);}
+  .ring-wrap{position:relative;width:220px;height:220px;margin-bottom:16px;}
+  #timerDigits{font-family:'Bebas Neue',sans-serif;font-size:3rem;position:absolute;inset:0;display:flex;align-items:center;justify-content:center;}
+  .t-info-row{display:flex;gap:24px;margin-bottom:14px;}
+  .t-info-row .val{font-family:'Bebas Neue',sans-serif;font-size:1.4rem;}
+  .t-info-row .lbl{font-size:.62rem;color:var(--muted);text-transform:uppercase;}
+  .rest-adjuster{display:flex;align-items:center;gap:8px;margin-bottom:16px;}
+  .adj-btn{width:30px;height:30px;border-radius:8px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:1.1rem;font-weight:700;}
+  .timer-btns{display:flex;gap:8px;width:100%;max-width:320px;}
+  .tc-btn{flex:1;background:var(--card);border:1px solid var(--border);color:var(--text);border-radius:10px;padding:12px;font-size:.78rem;font-weight:700;}
+  .tc-btn.primary{border-color:var(--accent);color:var(--accent);}
+  .tc-btn.danger{border-color:var(--danger);color:var(--danger);}
+  .cues-toggle{background:none;border:1px solid var(--border);color:var(--muted);border-radius:8px;padding:7px 16px;font-size:.72rem;margin-top:14px;}
+  .cues-box-timer{display:none;max-width:320px;margin-top:10px;padding:12px;background:var(--card);border:1px solid var(--border);border-radius:10px;font-size:.76rem;color:var(--muted);text-align:left;line-height:1.5;}
+  .cues-box-timer.open{display:block;}
+
+  .stub-note{text-align:center;padding:50px 20px;color:var(--muted);font-size:.85rem;line-height:1.6;}
+  .toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--accent);color:#000;padding:10px 18px;border-radius:20px;font-size:.78rem;font-weight:700;opacity:0;pointer-events:none;transition:.25s;z-index:1000;}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+</style>
+</head>
+<body>
+
+<!-- AUTH -->
+<div id="authScreen">
+  <h1>ENTRENOMASSA</h1>
+  <p>Tu entrenamiento, a tu manera.</p>
+  <div class="auth-box">
+    <input type="email" id="authEmail" placeholder="Email">
+    <input type="password" id="authPass" placeholder="Contraseña">
+    <button class="auth-btn" id="authSubmitBtn" onclick="handleAuth()">Entrar</button>
+    <div class="auth-error hidden" id="authError"></div>
+    <div class="auth-toggle" id="authToggle">¿No tienes cuenta? <span onclick="toggleAuthMode()">Regístrate</span></div>
+  </div>
+</div>
+
+<!-- MAIN APP -->
+<div id="mainApp" class="hidden">
+  <div id="topbar">
+    <h1>ENTRENOMASSA</h1>
+    <div id="userChip" onclick="handleLogout()">
+      <div id="userAvatar">?</div>
+      <span>Salir</span>
+    </div>
+  </div>
+
+  <!-- TAB: RUTINA -->
+  <div class="tab-panel active" id="panel-rutina">
+    <div id="daysList"></div>
+    <button class="add-btn" onclick="openAddDay()">＋ Agregar día</button>
+  </div>
+
+  <!-- TAB: PROGRESO -->
+  <div class="tab-panel" id="panel-progreso">
+    <div class="stub-note">📈 Gráfico y tabla de progreso por ejercicio<br>— lo armamos en la próxima sesión.</div>
+  </div>
+
+  <!-- TAB: CALENDARIO -->
+  <div class="tab-panel" id="panel-calendario">
+    <div class="stub-note">📅 Heatmap mensual de días entrenados<br>— lo armamos en la próxima sesión.</div>
+  </div>
+
+  <!-- TAB: SUPLEMENTOS -->
+  <div class="tab-panel" id="panel-suplementos">
+    <div class="stub-note">💊 Check diario de suplementos<br>— lo armamos en la próxima sesión.</div>
+  </div>
+</div>
+
+<!-- TAB BAR -->
+<div id="tabbar" class="hidden">
+  <button class="tab-btn active" data-tab="rutina" onclick="switchTab('rutina')"><span class="ic">🏋️</span>Rutina</button>
+  <button class="tab-btn" data-tab="progreso" onclick="switchTab('progreso')"><span class="ic">📈</span>Progreso</button>
+  <button class="tab-btn" data-tab="calendario" onclick="switchTab('calendario')"><span class="ic">📅</span>Calendario</button>
+  <button class="tab-btn" data-tab="suplementos" onclick="switchTab('suplementos')"><span class="ic">💊</span>Suplementos</button>
+</div>
+
+<!-- ADD/EDIT DAY SHEET -->
+<div class="sheet-overlay" id="dayOverlay" onclick="if(event.target===this)closeDaySheet()">
+  <div class="sheet">
+    <div class="sheet-head"><h3 id="daySheetTitle">＋ Nuevo día</h3><button class="icon-btn" onclick="closeDaySheet()">✕</button></div>
+    <input type="text" id="dayNameInput" placeholder="Nombre del día (ej: Martes, Día A, Fútbol)">
+    <div class="type-pick" id="dayTypePick">
+      <button data-type="gym" onclick="pickDayType('gym')">🏋️ Gym</button>
+      <button data-type="football" onclick="pickDayType('football')">⚽ Fútbol</button>
+      <button data-type="rest" onclick="pickDayType('rest')">🚶 Descanso</button>
+      <button data-type="custom" onclick="pickDayType('custom')">✨ Otro</button>
+    </div>
+    <button class="sheet-btn" onclick="saveDaySheet()">Guardar</button>
+  </div>
+</div>
+
+<!-- ADD EXERCISE SHEET -->
+<div class="sheet-overlay" id="addExOverlay" onclick="if(event.target===this)closeAddEx()">
+  <div class="sheet">
+    <div class="sheet-head"><h3>＋ Agregar ejercicio</h3><button class="icon-btn" onclick="closeAddEx()">✕</button></div>
+    <input type="text" id="addExManual" placeholder="Nombre manual...">
+    <button class="sheet-btn" style="margin-bottom:10px;" onclick="addExManual()">＋ Agregar nombre manual</button>
+    <button class="sheet-btn" style="background:var(--surface);border:1px solid var(--accent3);color:var(--accent3);" onclick="openExDb()">🔍 Buscar en base de datos (1.300+)</button>
+  </div>
+</div>
+
+<!-- EXERCISE DB SEARCH SHEET -->
+<div class="sheet-overlay" id="exDbOverlay" onclick="if(event.target===this)closeExDb()">
+  <div class="sheet">
+    <div class="sheet-head"><h3>🔍 Base de datos</h3><button class="icon-btn" onclick="closeExDb()">✕</button></div>
+    <input type="text" id="exDbSearch" placeholder="Buscar por nombre (en inglés)..." oninput="renderExDbResults()">
+    <div style="display:flex;gap:8px;margin-bottom:10px;">
+      <select id="exDbCategory" onchange="renderExDbResults()"></select>
+      <select id="exDbEquipment" onchange="renderExDbResults()"></select>
+    </div>
+    <div id="exDbResults"></div>
+  </div>
+</div>
+
+<!-- TIMER -->
+<div id="timerOverlay">
+  <div id="timerExName">—</div>
+  <div class="timer-badge work" id="timerBadge">SERIE 1</div>
+  <div class="ring-wrap">
+    <svg width="220" height="220" viewBox="0 0 220 220">
+      <circle cx="110" cy="110" r="88" fill="none" stroke="var(--surface)" stroke-width="12"/>
+      <circle id="ringFill" cx="110" cy="110" r="88" fill="none" stroke="var(--accent)" stroke-width="12"
+        stroke-linecap="round" stroke-dasharray="553" stroke-dashoffset="553" transform="rotate(-90 110 110)"/>
+    </svg>
+    <div id="timerDigits">0:00</div>
+  </div>
+  <div class="t-info-row">
+    <div><div class="val" id="tSerie">1</div><div class="lbl">Serie</div></div>
+    <div><div class="val" id="tTotal">3</div><div class="lbl">Total</div></div>
+    <div><div class="val" id="tReps">—</div><div class="lbl">Reps</div></div>
+  </div>
+  <div class="rest-adjuster">
+    <span style="font-size:.68rem;color:var(--muted);text-transform:uppercase;">Descanso</span>
+    <button class="adj-btn" onclick="adjustRestSec(-15)">−</button>
+    <div id="tRestSec" style="font-family:'Bebas Neue',sans-serif;font-size:1.1rem;min-width:44px;">60s</div>
+    <button class="adj-btn" onclick="adjustRestSec(15)">+</button>
+  </div>
+  <div class="timer-btns">
+    <button class="tc-btn" id="tcSkip" onclick="timerSkip()">✅ Iniciar descanso</button>
+    <button class="tc-btn primary" id="tcPlayPause" onclick="timerToggle()">⏸ Pausar</button>
+    <button class="tc-btn danger" onclick="timerClose()">✕</button>
+  </div>
+  <button class="cues-toggle" id="timerCuesToggle" onclick="toggleTimerCues()">📋 Ver instrucciones ▼</button>
+  <div class="cues-box-timer" id="timerCuesBox"></div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ═══════════════════════════════════════════
+// SUPABASE
+// ═══════════════════════════════════════════
+const SUPABASE_URL = 'https://hlmmwiwjtfqvfodkauxd.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_fcGziq2RG3uQPBU9bGPZRQ_O5YQIR9X';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+let currentUser = null;
+let authMode = 'login'; // 'login' | 'signup'
+
+function toggleAuthMode(){
+  authMode = authMode === 'login' ? 'signup' : 'login';
+  document.getElementById('authSubmitBtn').textContent = authMode === 'login' ? 'Entrar' : 'Crear cuenta';
+  document.getElementById('authToggle').innerHTML = authMode === 'login'
+    ? '¿No tienes cuenta? <span onclick="toggleAuthMode()">Regístrate</span>'
+    : '¿Ya tienes cuenta? <span onclick="toggleAuthMode()">Inicia sesión</span>';
+}
+
+async function handleAuth(){
+  const email = document.getElementById('authEmail').value.trim();
+  const pass = document.getElementById('authPass').value;
+  const errBox = document.getElementById('authError');
+  errBox.classList.add('hidden');
+  if(!email || !pass){ errBox.textContent = 'Completa email y contraseña.'; errBox.classList.remove('hidden'); return; }
+  try{
+    const { data, error } = authMode === 'login'
+      ? await sb.auth.signInWithPassword({ email, password: pass })
+      : await sb.auth.signUp({ email, password: pass });
+    if(error) throw error;
+    if(authMode === 'signup' && !data.session){
+      errBox.style.color = 'var(--green)';
+      errBox.textContent = 'Cuenta creada — revisa tu correo para confirmar.';
+      errBox.classList.remove('hidden');
+      return;
+    }
+    await onLoggedIn(data.user || data.session.user);
+  }catch(e){
+    errBox.style.color = 'var(--danger)';
+    errBox.textContent = e.message || 'Error al autenticar.';
+    errBox.classList.remove('hidden');
+  }
+}
+async function handleLogout(){
+  await sb.auth.signOut();
+  currentUser = null;
+  document.getElementById('mainApp').classList.add('hidden');
+  document.getElementById('tabbar').classList.add('hidden');
+  document.getElementById('authScreen').classList.remove('hidden');
+}
+async function onLoggedIn(user){
+  currentUser = user;
+  document.getElementById('authScreen').classList.add('hidden');
+  document.getElementById('mainApp').classList.remove('hidden');
+  document.getElementById('tabbar').classList.remove('hidden');
+  const label = (user.email || '?')[0].toUpperCase();
+  document.getElementById('userAvatar').textContent = label;
+  await loadDays();
+}
+(async function initAuth(){
+  const { data } = await sb.auth.getSession();
+  if(data.session) await onLoggedIn(data.session.user);
+})();
+
+// ═══════════════════════════════════════════
+// TABS
+// ═══════════════════════════════════════════
+function switchTab(name){
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('panel-' + name).classList.add('active');
+  document.querySelector(`.tab-btn[data-tab="${name}"]`).classList.add('active');
+}
+
+// ═══════════════════════════════════════════
+// DAYS + EXERCISES (estado local, sincronizado con Supabase)
+// ═══════════════════════════════════════════
+let DAYS = []; // [{id, name, day_type, sort_order, exercises:[...], doneToday:bool}]
+const DAY_TYPE_ICON = { gym:'🏋️', football:'⚽', rest:'🚶', custom:'✨' };
+
+async function loadDays(){
+  const { data: days, error } = await sb.from('days').select('*').eq('user_id', currentUser.id).order('sort_order');
+  if(error){ console.error(error); return; }
+  const { data: exs } = await sb.from('exercises').select('*').eq('user_id', currentUser.id).order('sort_order');
+  const todayStr = new Date().toISOString().slice(0,10);
+  const { data: sessionsToday } = await sb.from('sessions').select('day_id').eq('user_id', currentUser.id).eq('session_date', todayStr);
+  const doneIds = new Set((sessionsToday||[]).map(s => s.day_id));
+
+  DAYS = (days||[]).map(d => ({
+    ...d,
+    exercises: (exs||[]).filter(e => e.day_id === d.id),
+    doneToday: doneIds.has(d.id)
+  }));
+  renderDays();
+}
+
+function renderDays(){
+  const box = document.getElementById('daysList');
+  if(!DAYS.length){
+    box.innerHTML = `<div class="empty-state"><div class="big">🗓️</div>Todavía no tienes días armados.<br>Toca "＋ Agregar día" para empezar.</div>`;
+    return;
+  }
+  box.innerHTML = DAYS.map(d => `
+    <div class="day-card">
+      <div class="day-head">
+        <span class="day-type-badge">${DAY_TYPE_ICON[d.day_type]||'✨'}</span>
+        <div style="flex:1;cursor:pointer;" onclick="toggleDay('${d.id}')">
+          <div class="day-name">${d.name}</div>
+          <div class="day-count">${d.exercises.length} ejercicio${d.exercises.length===1?'':'s'} ${d.doneToday ? '· ✅ hecho hoy' : ''}</div>
+        </div>
+        <div class="day-actions">
+          <button class="icon-btn" onclick="openEditDay('${d.id}')">✎</button>
+          <button class="icon-btn" onclick="deleteDay('${d.id}')">🗑</button>
+        </div>
+      </div>
+      <div class="day-body" id="daybody-${d.id}">
+        <div id="exlist-${d.id}"></div>
+        <button class="add-btn" onclick="openAddEx('${d.id}')">＋ Agregar ejercicio</button>
+        <button class="mark-done-btn ${d.doneToday?'done':''}" onclick="toggleSessionDone('${d.id}')">
+          ${d.doneToday ? '✅ Marcado como hecho hoy — toca para deshacer' : '✅ Marcar como hecho hoy'}
+        </button>
+      </div>
+    </div>
+  `).join('');
+  DAYS.forEach(d => renderExercisesForDay(d.id));
+}
+
+function toggleDay(id){
+  const el = document.getElementById('daybody-' + id);
+  el.classList.toggle('open');
+}
+
+// ── ADD / EDIT / DELETE DAY ──
+let editingDayId = null, pickedDayType = 'gym';
+function openAddDay(){
+  editingDayId = null;
+  document.getElementById('daySheetTitle').textContent = '＋ Nuevo día';
+  document.getElementById('dayNameInput').value = '';
+  pickDayType('gym');
+  document.getElementById('dayOverlay').classList.add('show');
+}
+function openEditDay(id){
+  const d = DAYS.find(x => x.id === id);
+  if(!d) return;
+  editingDayId = id;
+  document.getElementById('daySheetTitle').textContent = '✎ Editar día';
+  document.getElementById('dayNameInput').value = d.name;
+  pickDayType(d.day_type);
+  document.getElementById('dayOverlay').classList.add('show');
+}
+function closeDaySheet(){ document.getElementById('dayOverlay').classList.remove('show'); }
+function pickDayType(type){
+  pickedDayType = type;
+  document.querySelectorAll('#dayTypePick button').forEach(b => b.classList.toggle('active', b.dataset.type === type));
+}
+async function saveDaySheet(){
+  const name = document.getElementById('dayNameInput').value.trim();
+  if(!name) return;
+  if(editingDayId){
+    await sb.from('days').update({ name, day_type: pickedDayType }).eq('id', editingDayId);
+  } else {
+    const sort_order = DAYS.length ? Math.max(...DAYS.map(d=>d.sort_order))+1 : 0;
+    await sb.from('days').insert({ user_id: currentUser.id, name, day_type: pickedDayType, sort_order });
+  }
+  closeDaySheet();
+  await loadDays();
+  showToast('✅ Día guardado');
+}
+async function deleteDay(id){
+  if(!confirm('¿Eliminar este día y todos sus ejercicios?')) return;
+  await sb.from('days').delete().eq('id', id);
+  await loadDays();
+}
+
+// ── EXERCISES ──
+function renderExercisesForDay(dayId){
+  const d = DAYS.find(x => x.id === dayId);
+  const box = document.getElementById('exlist-' + dayId);
+  if(!box) return;
+  if(!d.exercises.length){
+    box.innerHTML = `<div class="empty-state" style="padding:16px;">Sin ejercicios todavía.</div>`;
+    return;
+  }
+  box.innerHTML = d.exercises.map(ex => `
+    <div class="ex-card" id="excard-${ex.id}">
+      <div class="ex-head" onclick="toggleExDetail('${ex.id}')">
+        ${ex.img ? `<img class="ex-thumb" src="${ex.img}" onerror="this.style.display='none'">` : ''}
+        <div style="flex:1;">
+          <div class="ex-name">${ex.name}</div>
+          <div class="ex-meta">${ex.series} series × ${ex.reps} · ${ex.rest_sec}s descanso</div>
+        </div>
+      </div>
+      <div class="ex-detail" id="exdetail-${ex.id}">
+        ${ex.gif ? `<img class="ex-gif" src="${ex.gif}" loading="lazy" onerror="this.style.display='none'">` : ''}
+        ${(ex.cues&&ex.cues.length) ? `<div class="cues-box"><ul>${ex.cues.map(c=>`<li>${c}</li>`).join('')}</ul></div>` : ''}
+        <div class="set-hint">Serie · Peso (kg) · Reps</div>
+        <div id="sets-${ex.id}"></div>
+        <div class="ex-row-btns">
+          <button class="ex-btn-sm timer" onclick="launchTimer('${ex.id}')">⏱ Cronómetro</button>
+          <button class="ex-btn-sm danger" onclick="deleteExercise('${ex.id}','${dayId}')">🗑 Quitar</button>
+        </div>
+      </div>
+    </div>
+  `).join('');
+  d.exercises.forEach(ex => renderSetRows(ex.id));
+}
+function toggleExDetail(exId){
+  document.getElementById('exdetail-' + exId).classList.toggle('open');
+}
+function findExercise(exId){
+  for(const d of DAYS){ const ex = d.exercises.find(e => e.id === exId); if(ex) return ex; }
+  return null;
+}
+function renderSetRows(exId){
+  const ex = findExercise(exId);
+  const box = document.getElementById('sets-' + exId);
+  if(!box) return;
+  let html = '';
+  for(let i=1; i<=ex.series; i++){
+    html += `
+      <div class="set-row">
+        <div class="set-num">${i}</div>
+        <input type="number" inputmode="decimal" placeholder="kg" id="w-${exId}-${i}">
+        <input type="number" inputmode="numeric" placeholder="${ex.reps}" id="r-${exId}-${i}">
+        <button class="set-save" id="save-${exId}-${i}" onclick="saveSet('${exId}',${i})">✓</button>
+      </div>`;
+  }
+  box.innerHTML = html;
+}
+async function saveSet(exId, serieNum){
+  const w = document.getElementById(`w-${exId}-${serieNum}`).value;
+  const r = document.getElementById(`r-${exId}-${serieNum}`).value;
+  if(!w && !r) return;
+  await sb.from('set_logs').insert({
+    user_id: currentUser.id,
+    exercise_id: exId,
+    serie_number: serieNum,
+    weight: w ? parseFloat(w) : null,
+    reps: r ? parseInt(r) : null
+  });
+  const btn = document.getElementById(`save-${exId}-${serieNum}`);
+  btn.classList.add('saved');
+  showToast('✅ Serie guardada');
+}
+
+let addExContext = null; // dayId
+function openAddEx(dayId){
+  addExContext = dayId;
+  document.getElementById('addExManual').value = '';
+  document.getElementById('addExOverlay').classList.add('show');
+}
+function closeAddEx(){ document.getElementById('addExOverlay').classList.remove('show'); }
+async function addExManual(){
+  const name = document.getElementById('addExManual').value.trim();
+  if(!name) return;
+  await insertExercise(addExContext, { name, series:3, reps:'10', rest_sec:60 });
+  closeAddEx();
+}
+async function insertExercise(dayId, fields){
+  const d = DAYS.find(x => x.id === dayId);
+  const sort_order = d.exercises.length ? Math.max(...d.exercises.map(e=>e.sort_order))+1 : 0;
+  await sb.from('exercises').insert({
+    day_id: dayId, user_id: currentUser.id, sort_order,
+    tempo: 'Controlado', cues: [],
+    ...fields
+  });
+  await loadDays();
+  document.getElementById('daybody-' + dayId).classList.add('open');
+  showToast(`✅ "${fields.name}" agregado`);
+}
+async function deleteExercise(exId, dayId){
+  await sb.from('exercises').delete().eq('id', exId);
+  await loadDays();
+  document.getElementById('daybody-' + dayId).classList.add('open');
+}
+
+// ═══════════════════════════════════════════
+// SESSIONS (marcar día como hecho → alimenta calendario)
+// ═══════════════════════════════════════════
+async function toggleSessionDone(dayId){
+  const d = DAYS.find(x => x.id === dayId);
+  const todayStr = new Date().toISOString().slice(0,10);
+  if(d.doneToday){
+    await sb.from('sessions').delete().eq('user_id', currentUser.id).eq('day_id', dayId).eq('session_date', todayStr);
+  } else {
+    await sb.from('sessions').insert({ user_id: currentUser.id, day_id: dayId, session_date: todayStr, day_type: d.day_type, completed: true });
+    showToast('🔥 ¡Sesión registrada!');
+  }
+  await loadDays();
+  document.getElementById('daybody-' + dayId).classList.add('open');
+}
+
+// ═══════════════════════════════════════════
+// BASE DE DATOS DE EJERCICIOS (data/exercises-es.json) + traducción
+// ═══════════════════════════════════════════
+const EX_NAME_DICT = [
+  ["bench press","press banca"],["shoulder press","press de hombro"],
+  ["overhead press","press por encima de la cabeza"],["military press","press militar"],
+  ["chest press","press de pecho"],["leg press","prensa de piernas"],
+  ["leg curl","curl de piernas"],["leg extension","extensión de piernas"],
+  ["calf raise","elevación de talones"],["lat pulldown","jalón al pecho"],
+  ["face pull","jalón facial"],["good morning","buenos días"],
+  ["hip thrust","empuje de cadera"],["glute bridge","puente de glúteo"],
+  ["russian twist","giro ruso"],["mountain climber","escalador"],
+  ["jumping jack","salto de tijera"],["step-up","subida al cajón"],["step up","subida al cajón"],
+  ["push-up","flexión"],["push up","flexión"],["pull-up","dominada"],["pull up","dominada"],
+  ["sit-up","abdominal"],["sit up","abdominal"],
+  ["single-arm","a un brazo"],["single arm","a un brazo"],
+  ["single-leg","a una pierna"],["single leg","a una pierna"],
+  ["one arm","a un brazo"],["one leg","a una pierna"],
+  ["close-grip","agarre cerrado"],["close grip","agarre cerrado"],
+  ["wide grip","agarre ancho"],["neutral grip","agarre neutro"],
+  ["underhand grip","agarre supino"],["overhand grip","agarre prono"],
+  ["behind the neck","detrás de la nuca"],["around the world","alrededor del mundo"],
+  ["bent-over","inclinado hacia adelante"],["bent over","inclinado hacia adelante"],
+  ["body weight","peso corporal"],["bodyweight","peso corporal"],
+  ["stability ball","balón suizo"],["medicine ball","balón medicinal"],
+  ["smith machine","máquina smith"],["leverage machine","máquina de palanca"],
+  ["ez barbell","barra ez"],["ez-bar","barra ez"],
+  ["resistance band","banda de resistencia"],["cross body","cruzado"],
+  ["barbell","barra"],["dumbbell","mancuerna"],["kettlebell","pesa rusa"],
+  ["cable","polea"],["band","banda"],["machine","máquina"],["weighted","con peso"],
+  ["squat","sentadilla"],["deadlift","peso muerto"],["press","press"],["curl","curl"],
+  ["row","remo"],["flye","apertura"],["fly","apertura"],["raise","elevación"],
+  ["extension","extensión"],["pulldown","jalón"],["plank","plancha"],["lunge","zancada"],
+  ["crunch","abdominal"],["twist","giro"],["dip","fondo"],["shrug","encogimiento"],
+  ["kickback","patada"],["thrust","empuje"],["swing","balanceo"],["jump","salto"],
+  ["bridge","puente"],["burpee","burpee"],
+  ["biceps","bíceps"],["bicep","bíceps"],["triceps","tríceps"],["tricep","tríceps"],
+  ["chest","pecho"],["shoulders","hombros"],["shoulder","hombro"],["legs","piernas"],
+  ["leg","pierna"],["calves","pantorrillas"],["calf","pantorrilla"],["hips","caderas"],
+  ["hip","cadera"],["glutes","glúteos"],["glute","glúteo"],["obliques","oblicuos"],
+  ["oblique","oblicuo"],["abdominal","abdominal"],["abs","abdominales"],["lats","dorsales"],
+  ["lat","dorsal"],["forearm","antebrazo"],["neck","cuello"],["quads","cuádriceps"],
+  ["quad","cuádriceps"],["hamstrings","isquiotibiales"],["hamstring","isquiotibial"],
+  ["traps","trapecios"],["trap","trapecio"],["back","espalda"],
+  ["lateral","lateral"],["incline","inclinado"],["decline","declinado"],["standing","de pie"],
+  ["seated","sentado"],["lying","acostado"],["kneeling","arrodillado"],["alternating","alterno"],
+  ["alternate","alterno"],["wide","ancho"],["narrow","estrecho"],["close","cerrado"],
+  ["reverse","inverso"],["underhand","supino"],["overhand","prono"],["front","frontal"],
+  ["rear","posterior"],["overhead","por encima de la cabeza"],["romanian","rumano"],
+  ["sumo","sumo"],["bulgarian","búlgaro"],["split","dividido"],["walking","caminando"],
+  ["box","cajón"],["plyo","pliométrico"],["explosive","explosivo"],["isometric","isométrico"],
+  ["full","completo"],["partial","parcial"],["assisted","asistido"],["elevated","elevado"],
+  ["banded","con banda"],["diagonal","diagonal"],["straight","recto"],
+  ["with","con"],["and","y"],["to","a"],
+];
+function translateExName(name){
+  let s = ' ' + name.toLowerCase() + ' ';
+  for(const [en, es] of EX_NAME_DICT){
+    const re = new RegExp('(^|[^a-záéíóúñ])'+en.replace(/[-/\\^$*+?.()|[\]{}]/g,'\\$&')+'($|[^a-záéíóúñ])','gi');
+    s = s.replace(re, (m,p1,p2)=>p1+es+p2);
+  }
+  s = s.trim().replace(/\s+/g,' ');
+  return s.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+}
+let EXDB = null;
+async function loadExDb(){
+  if(EXDB) return EXDB;
+  try{ const r = await fetch('data/exercises-es.json'); EXDB = await r.json(); }
+  catch(e){ console.error('No se pudo cargar data/exercises-es.json', e); EXDB = []; }
+  return EXDB;
+}
+async function openExDb(){
+  await loadExDb();
+  const catSel = document.getElementById('exDbCategory');
+  const eqSel = document.getElementById('exDbEquipment');
+  if(catSel.options.length === 0){
+    const cats = [...new Set(EXDB.map(e=>e.category))].sort();
+    catSel.innerHTML = '<option value="">Todas las zonas</option>' + cats.map(c=>`<option value="${c}">${c}</option>`).join('');
+    const eqs = [...new Set(EXDB.map(e=>e.equipment))].sort();
+    eqSel.innerHTML = '<option value="">Todo equipo</option>' + eqs.map(e=>`<option value="${e}">${e}</option>`).join('');
+  }
+  document.getElementById('exDbSearch').value = '';
+  renderExDbResults();
+  document.getElementById('exDbOverlay').classList.add('show');
+}
+function closeExDb(){ document.getElementById('exDbOverlay').classList.remove('show'); }
+function renderExDbResults(){
+  if(!EXDB) return;
+  const q = document.getElementById('exDbSearch').value.toLowerCase().trim();
+  const cat = document.getElementById('exDbCategory').value;
+  const eq = document.getElementById('exDbEquipment').value;
+  let results = EXDB;
+  if(q) results = results.filter(e => e.name.toLowerCase().includes(q));
+  if(cat) results = results.filter(e => e.category === cat);
+  if(eq) results = results.filter(e => e.equipment === eq);
+  results = results.slice(0, 40);
+  const box = document.getElementById('exDbResults');
+  if(!results.length){
+    box.innerHTML = `<div class="empty-state">Sin resultados — prueba otro término (nombres en inglés)</div>`;
+    return;
+  }
+  box.innerHTML = results.map(e => `
+    <div class="exdb-card" onclick="addExerciseFromDb('${e.id}')">
+      <img class="exdb-thumb" src="${e.image}" loading="lazy" onerror="this.style.display='none'">
+      <div style="flex:1;">
+        <div class="exdb-name">${translateExName(e.name)}</div>
+        <div class="exdb-meta">${e.category} · ${e.equipment} · <span style="opacity:.6">${e.name}</span></div>
+      </div>
+      <button class="exdb-add" onclick="event.stopPropagation();addExerciseFromDb('${e.id}')">＋</button>
+    </div>
+  `).join('');
+}
+async function addExerciseFromDb(exId){
+  const item = EXDB.find(e => e.id === exId);
+  if(!item) return;
+  const translatedName = translateExName(item.name);
+  await insertExercise(addExContext, {
+    name: translatedName,
+    name_en: item.name,
+    series: 3, reps: '10',
+    rest_sec: item.category === 'cardio' ? 30 : 60,
+    cues: (item.steps_es && item.steps_es.length) ? item.steps_es : [item.instructions_es],
+    img: item.image, gif: item.gif_url,
+    category: 'strength'
+  });
+  closeExDb(); closeAddEx();
+}
+
+// ═══════════════════════════════════════════
+// TIMER
+// ═══════════════════════════════════════════
+const CIRC = 553;
+let timerState = null, timerInterval = null;
+let exRestOverride = {};
+try{ exRestOverride = JSON.parse(localStorage.getItem('rutina_rest_override')||'{}'); }catch(e){}
+function getRestSec(exId, def){ return exRestOverride[exId] != null ? exRestOverride[exId] : def; }
+function saveRestOverride(){ try{ localStorage.setItem('rutina_rest_override', JSON.stringify(exRestOverride)); }catch(e){} }
+
+function launchTimer(exId){
+  const ex = findExercise(exId);
+  if(!ex) return;
+  const restSec = getRestSec(ex.id, ex.rest_sec);
+  timerState = { ex, phase:'work', currentSerie:1, totalSeries:ex.series, restSec, workSec:0, restRemaining:restSec, running:true };
+  const skipBtn = document.getElementById('tcSkip');
+  skipBtn.onclick = timerSkip;
+  resetTimerCues();
+  updateTimerUI();
+  document.getElementById('timerOverlay').classList.add('show');
+  clearInterval(timerInterval);
+  timerInterval = setInterval(tickTimer, 1000);
+}
+function adjustRestSec(delta){
+  if(!timerState) return;
+  const exId = timerState.ex.id;
+  const current = getRestSec(exId, timerState.ex.rest_sec);
+  const next = Math.max(10, current + delta);
+  exRestOverride[exId] = next;
+  saveRestOverride();
+  timerState.restSec = next;
+  if(timerState.phase === 'rest') timerState.restRemaining = Math.max(1, timerState.restRemaining + delta);
+  updateTimerUI();
+}
+function fmt(s){ const m=Math.floor(s/60), sec=s%60; return `${m}:${sec.toString().padStart(2,'0')}`; }
+function tickTimer(){
+  if(!timerState || !timerState.running) return;
+  if(timerState.phase === 'work'){
+    timerState.workSec++;
+  } else {
+    timerState.restRemaining--;
+    if(timerState.restRemaining <= 0){
+      timerState.currentSerie++;
+      if(timerState.currentSerie > timerState.totalSeries){
+        clearInterval(timerInterval);
+        document.getElementById('timerDigits').textContent = '✓';
+        document.getElementById('timerBadge').textContent = '¡COMPLETADO!';
+        return;
+      }
+      timerState.phase = 'work';
+      timerState.workSec = 0;
+      timerState.restRemaining = timerState.restSec;
+    }
+  }
+  updateTimerUI();
+}
+function updateTimerUI(){
+  const s = timerState;
+  const badge = document.getElementById('timerBadge');
+  const ring = document.getElementById('ringFill');
+  document.getElementById('timerExName').textContent = s.ex.name;
+  document.getElementById('tSerie').textContent = s.currentSerie;
+  document.getElementById('tTotal').textContent = s.totalSeries;
+  document.getElementById('tReps').textContent = s.ex.reps;
+  document.getElementById('tRestSec').textContent = s.restSec + 's';
+  const cuesBox = document.getElementById('timerCuesBox');
+  if(cuesBox && s.ex.cues) cuesBox.innerHTML = `<b>Tempo:</b> ${s.ex.tempo||'Controlado'}<ul>${(s.ex.cues||[]).map(c=>`<li>${c}</li>`).join('')}</ul>`;
+  if(s.phase === 'work'){
+    badge.textContent = `SERIE ${s.currentSerie}`; badge.className = 'timer-badge work';
+    document.getElementById('timerDigits').textContent = fmt(s.workSec);
+    ring.setAttribute('stroke', 'var(--accent)');
+    ring.style.strokeDashoffset = CIRC - Math.min(s.workSec/180,1)*CIRC;
+    document.getElementById('tcSkip').textContent = '✅ Iniciar descanso';
+  } else {
+    badge.textContent = 'DESCANSO'; badge.className = 'timer-badge rest';
+    document.getElementById('timerDigits').textContent = fmt(s.restRemaining);
+    ring.setAttribute('stroke', 'var(--accent3)');
+    ring.style.strokeDashoffset = CIRC * (1 - s.restRemaining/s.restSec);
+    document.getElementById('tcSkip').textContent = '⏭ Saltar descanso';
+  }
+  document.getElementById('tcPlayPause').textContent = s.running ? '⏸ Pausar' : '▶ Reanudar';
+}
+function timerSkip(){
+  if(!timerState) return;
+  if(timerState.phase === 'work'){
+    timerState.phase = 'rest';
+    timerState.restRemaining = timerState.restSec;
+  } else {
+    timerState.currentSerie++;
+    if(timerState.currentSerie > timerState.totalSeries){ timerClose(); return; }
+    timerState.phase = 'work';
+    timerState.workSec = 0;
+  }
+  updateTimerUI();
+}
+function timerClose(){ clearInterval(timerInterval); timerState = null; document.getElementById('timerOverlay').classList.remove('show'); }
+function timerToggle(){ if(!timerState) return; timerState.running = !timerState.running; document.getElementById('tcPlayPause').textContent = timerState.running ? '⏸ Pausar' : '▶ Reanudar'; }
+function toggleTimerCues(){
+  const box = document.getElementById('timerCuesBox');
+  const btn = document.getElementById('timerCuesToggle');
+  const open = box.classList.toggle('open');
+  btn.textContent = open ? '📋 Ocultar instrucciones ▲' : '📋 Ver instrucciones ▼';
+}
+function resetTimerCues(){
+  document.getElementById('timerCuesBox').classList.remove('open');
+  document.getElementById('timerCuesToggle').textContent = '📋 Ver instrucciones ▼';
+}
+
+// ═══════════════════════════════════════════
+// TOAST
+// ═══════════════════════════════════════════
+function showToast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2200);
+}
+</script>
+</body>
+</html>
