@@ -178,7 +178,12 @@
 
   <!-- TAB: PROGRESO -->
   <div class="tab-panel" id="panel-progreso">
-    <select id="progressExSelect" onchange="loadProgressChart()" style="width:100%;background:var(--card);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:10px 12px;font-size:.85rem;margin-bottom:14px;"></select>
+    <select id="progressExSelect" onchange="loadProgressChart()" style="width:100%;background:var(--card);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:10px 12px;font-size:.85rem;margin-bottom:10px;"></select>
+    <div class="type-pick" id="progressMetricPick">
+      <button data-metric="weight" class="active" onclick="setProgressMetric('weight')">🏋️ Peso máx</button>
+      <button data-metric="reps" onclick="setProgressMetric('reps')">🔢 Reps totales</button>
+      <button data-metric="volume" onclick="setProgressMetric('volume')">📦 Volumen</button>
+    </div>
     <div id="progressEmpty" class="empty-state"><div class="big">📈</div>Elige un ejercicio para ver su progreso.</div>
     <div id="progressChartWrap" class="hidden">
       <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:14px;">
@@ -195,12 +200,23 @@
 
   <!-- TAB: CALENDARIO -->
   <div class="tab-panel" id="panel-calendario">
-    <div class="stub-note">📅 Heatmap mensual de días entrenados<br>— lo armamos en la próxima sesión.</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+      <button class="icon-btn" onclick="calShiftMonth(-1)">‹</button>
+      <div id="calMonthLabel" style="font-weight:700;font-size:.95rem;text-transform:capitalize;"></div>
+      <button class="icon-btn" onclick="calShiftMonth(1)">›</button>
+    </div>
+    <div id="calGrid" style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:6px;"></div>
+    <div style="display:flex;gap:12px;flex-wrap:wrap;font-size:.62rem;color:var(--muted);margin-bottom:14px;">
+      <span>🟢 Gym</span><span>🔵 Fútbol</span><span>🟡 Descanso</span><span>🟣 Otro</span>
+    </div>
+    <div id="calDayDetail" class="empty-state" style="padding:16px;">Toca un día para ver el detalle.</div>
+    <button class="add-btn" onclick="openLogPast()">＋ Agregar sesión pasada</button>
   </div>
 
   <!-- TAB: SUPLEMENTOS -->
   <div class="tab-panel" id="panel-suplementos">
-    <div class="stub-note">💊 Check diario de suplementos<br>— lo armamos en la próxima sesión.</div>
+    <div id="supplementsList"></div>
+    <button class="add-btn" onclick="openAddSupplement()">＋ Agregar suplemento</button>
   </div>
 </div>
 
@@ -224,6 +240,38 @@
       <button data-type="custom" onclick="pickDayType('custom')">✨ Otro</button>
     </div>
     <button class="sheet-btn" onclick="saveDaySheet()">Guardar</button>
+  </div>
+</div>
+
+<!-- LOG PAST SESSION SHEET -->
+<div class="sheet-overlay" id="logPastOverlay" onclick="if(event.target===this)closeLogPast()">
+  <div class="sheet">
+    <div class="sheet-head"><h3>＋ Sesión pasada</h3><button class="icon-btn" onclick="closeLogPast()">✕</button></div>
+    <input type="date" id="logPastDate">
+    <div class="type-pick" id="logPastModePick">
+      <button data-mode="day" onclick="pickLogPastMode('day')">📋 Uno de mis días</button>
+      <button data-mode="custom" onclick="pickLogPastMode('custom')">✨ Suelto (sin día)</button>
+    </div>
+    <select id="logPastDaySelect"></select>
+    <input type="text" id="logPastCustomLabel" class="hidden" placeholder="Ej: Trote suelto, Partido de fútbol...">
+    <div class="type-pick hidden" id="logPastCustomType">
+      <button data-type="gym" onclick="pickLogPastType('gym')">🏋️ Gym</button>
+      <button data-type="football" onclick="pickLogPastType('football')">⚽ Fútbol</button>
+      <button data-type="rest" onclick="pickLogPastType('rest')">🚶 Descanso</button>
+      <button data-type="custom" onclick="pickLogPastType('custom')">✨ Otro</button>
+    </div>
+    <textarea id="logPastNotes" placeholder="Notas (opcional)" style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:10px;font-size:.82rem;margin-bottom:8px;min-height:50px;font-family:inherit;"></textarea>
+    <button class="sheet-btn" onclick="saveLogPast()">Guardar</button>
+  </div>
+</div>
+
+<!-- ADD SUPPLEMENT SHEET -->
+<div class="sheet-overlay" id="suppOverlay" onclick="if(event.target===this)closeSuppSheet()">
+  <div class="sheet">
+    <div class="sheet-head"><h3>＋ Suplemento</h3><button class="icon-btn" onclick="closeSuppSheet()">✕</button></div>
+    <input type="text" id="suppName" placeholder="Nombre (ej: Creatina)">
+    <input type="text" id="suppDose" placeholder="Dosis (opcional, ej: 5g)">
+    <button class="sheet-btn" onclick="saveSupplement()">Guardar</button>
   </div>
 </div>
 
@@ -383,20 +431,30 @@ function switchTab(name){
   document.getElementById('panel-' + name).classList.add('active');
   document.querySelector(`.tab-btn[data-tab="${name}"]`).classList.add('active');
   if(name === 'progreso') loadProgressExerciseList();
+  if(name === 'calendario') renderCalendar();
+  if(name === 'suplementos') loadSupplements();
 }
 
 // ═══════════════════════════════════════════
 // PROGRESO (gráfico + tabla por ejercicio)
 // ═══════════════════════════════════════════
 let progressChartInstance = null;
+let progressMetric = 'weight';
+function setProgressMetric(metric){
+  progressMetric = metric;
+  document.querySelectorAll('#progressMetricPick button').forEach(b => b.classList.toggle('active', b.dataset.metric === metric));
+  loadProgressChart();
+}
 function loadProgressExerciseList(){
   const opts = [];
   DAYS.forEach(d => d.exercises.filter(ex => (ex.category||'strength')==='strength').forEach(ex => opts.push({ id: ex.id, label: `${ex.name} (${d.name})` })));
   const sel = document.getElementById('progressExSelect');
   const prevVal = sel.value;
   sel.innerHTML = '<option value="">Elige un ejercicio...</option>' + opts.map(o => `<option value="${o.id}">${o.label}</option>`).join('');
+  document.querySelectorAll('#progressMetricPick button').forEach(b => b.classList.toggle('active', b.dataset.metric === progressMetric));
   if(opts.some(o => o.id === prevVal)){ sel.value = prevVal; loadProgressChart(); }
 }
+const PROGRESS_METRIC_LABEL = { weight:'Peso máx (kg)', reps:'Reps totales', volume:'Volumen (kg × reps)' };
 async function loadProgressChart(){
   const exId = document.getElementById('progressExSelect').value;
   const wrap = document.getElementById('progressChartWrap');
@@ -412,21 +470,26 @@ async function loadProgressChart(){
   empty.classList.add('hidden');
   wrap.classList.remove('hidden');
 
-  // agrupar por día, usando el peso máximo registrado ese día (top set)
+  // agrupar por día según la métrica elegida
   const byDate = {};
   logs.forEach(l => {
     const d = l.logged_at.slice(0,10);
     const w = l.weight || 0;
-    if(!(d in byDate) || w > byDate[d]) byDate[d] = w;
+    const r = l.reps || 0;
+    if(!(d in byDate)) byDate[d] = { maxWeight:0, totalReps:0, volume:0 };
+    byDate[d].maxWeight = Math.max(byDate[d].maxWeight, w);
+    byDate[d].totalReps += r;
+    byDate[d].volume += w * r;
   });
   const labels = Object.keys(byDate).sort();
-  const data = labels.map(d => byDate[d]);
+  const metricKey = progressMetric === 'weight' ? 'maxWeight' : progressMetric === 'reps' ? 'totalReps' : 'volume';
+  const data = labels.map(d => byDate[d][metricKey]);
 
   if(progressChartInstance) progressChartInstance.destroy();
   const ctx = document.getElementById('progressCanvas').getContext('2d');
   progressChartInstance = new Chart(ctx, {
     type: 'line',
-    data: { labels, datasets: [{ label:'Peso máx (kg)', data, borderColor:'#3ddc97', backgroundColor:'rgba(61,220,151,.15)', tension:.3, fill:true, pointRadius:3 }] },
+    data: { labels, datasets: [{ label: PROGRESS_METRIC_LABEL[progressMetric], data, borderColor:'#3ddc97', backgroundColor:'rgba(61,220,151,.15)', tension:.3, fill:true, pointRadius:3 }] },
     options: {
       responsive: true,
       plugins: { legend: { display:false } },
@@ -566,6 +629,9 @@ function renderExerciseCard(ex, dayId){
         ${(ex.cues&&ex.cues.length) ? `<div class="cues-box"><ul>${ex.cues.map(c=>`<li>${c}</li>`).join('')}</ul></div>` : ''}
         <div class="set-hint">Serie · Peso (kg) · Reps</div>
         <div id="sets-${ex.id}"></div>
+        <textarea id="notes-${ex.id}" placeholder="Notas — variación, mejora, qué agarre usar, etc."
+          onblur="saveExerciseNotes('${ex.id}')"
+          style="width:100%;background:var(--card);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 10px;font-size:.76rem;font-family:inherit;margin-top:8px;resize:vertical;min-height:38px;">${ex.notes || ''}</textarea>
         <div class="ex-row-btns">
           <button class="ex-btn-sm timer" onclick="launchTimer('${ex.id}')">⏱ Cronómetro</button>
           <button class="ex-btn-sm danger" onclick="deleteExercise('${ex.id}','${dayId}')">🗑 Quitar</button>
@@ -701,6 +767,13 @@ async function deleteExercise(exId, dayId){
   await sb.from('exercises').delete().eq('id', exId);
   await loadDays();
   document.getElementById('daybody-' + dayId).classList.add('open');
+}
+async function saveExerciseNotes(exId){
+  const val = document.getElementById('notes-' + exId).value;
+  await sb.from('exercises').update({ notes: val }).eq('id', exId);
+  const ex = findExercise(exId);
+  if(ex) ex.notes = val;
+  showToast('📝 Nota guardada');
 }
 
 // ═══════════════════════════════════════════
@@ -964,6 +1037,203 @@ function showToast(msg){
   t.textContent = msg;
   t.classList.add('show');
   setTimeout(() => t.classList.remove('show'), 2200);
+}
+
+// ═══════════════════════════════════════════
+// CALENDARIO (heatmap mensual)
+// ═══════════════════════════════════════════
+let calCurrentMonth = new Date();
+calCurrentMonth.setDate(1);
+let calSessionsCache = {};
+const CAL_TYPE_COLOR = { gym:'var(--accent)', football:'var(--accent3)', rest:'var(--yellow)', custom:'#a855f7' };
+function calShiftMonth(delta){
+  calCurrentMonth.setMonth(calCurrentMonth.getMonth() + delta);
+  renderCalendar();
+}
+async function renderCalendar(){
+  const year = calCurrentMonth.getFullYear();
+  const month = calCurrentMonth.getMonth();
+  document.getElementById('calMonthLabel').textContent = calCurrentMonth.toLocaleDateString('es-CL', { month:'long', year:'numeric' });
+
+  const firstOfMonth = new Date(year, month, 1);
+  const lastOfMonth = new Date(year, month + 1, 0);
+  const startStr = firstOfMonth.toISOString().slice(0,10);
+  const endStr = lastOfMonth.toISOString().slice(0,10);
+
+  const { data: sessions } = await sb.from('sessions').select('*').eq('user_id', currentUser.id).gte('session_date', startStr).lte('session_date', endStr);
+  calSessionsCache = {};
+  (sessions||[]).forEach(s => {
+    if(!calSessionsCache[s.session_date]) calSessionsCache[s.session_date] = [];
+    calSessionsCache[s.session_date].push(s);
+  });
+
+  const startWeekday = (firstOfMonth.getDay() + 6) % 7; // lunes=0
+  const daysInMonth = lastOfMonth.getDate();
+  const todayStr = new Date().toISOString().slice(0,10);
+
+  const headers = ['L','M','M','J','V','S','D'].map(h => `<div style="text-align:center;font-size:.62rem;color:var(--muted);">${h}</div>`).join('');
+  let cellsHtml = '';
+  for(let i=0; i<startWeekday; i++) cellsHtml += `<div></div>`;
+  for(let d=1; d<=daysInMonth; d++){
+    const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const daySessions = calSessionsCache[dateStr] || [];
+    const isToday = dateStr === todayStr;
+    let bg = 'var(--card)';
+    if(daySessions.length) bg = CAL_TYPE_COLOR[daySessions[0].day_type] || '#a855f7';
+    cellsHtml += `<div onclick="showCalDay('${dateStr}')" style="aspect-ratio:1;border-radius:7px;background:${bg};display:flex;align-items:center;justify-content:center;font-size:.72rem;font-weight:${daySessions.length?'700':'400'};color:${daySessions.length?'#000':'var(--muted)'};cursor:pointer;box-sizing:border-box;${isToday?'border:2px solid var(--text);':'border:1px solid var(--border);'}">${d}</div>`;
+  }
+  document.getElementById('calGrid').innerHTML = headers + cellsHtml;
+  document.getElementById('calDayDetail').innerHTML = `Toca un día para ver el detalle.`;
+}
+function showCalDay(dateStr){
+  const sessions = calSessionsCache[dateStr] || [];
+  const box = document.getElementById('calDayDetail');
+  if(!sessions.length){
+    box.innerHTML = `<div style="font-size:.78rem;color:var(--muted);">Nada registrado el ${dateStr}.</div>`;
+    return;
+  }
+  box.innerHTML = `<div style="font-size:.7rem;color:var(--muted);margin-bottom:8px;letter-spacing:1px;text-transform:uppercase;">${dateStr}</div>` + sessions.map(s => {
+    const d = DAYS.find(x => x.id === s.day_id);
+    const label = d ? d.name : (s.notes ? s.notes.split(' — ')[0] : 'Sesión suelta');
+    const extraNotes = d ? s.notes : (s.notes && s.notes.includes(' — ') ? s.notes.split(' — ').slice(1).join(' — ') : '');
+    return `<div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:6px;">
+      <div style="font-weight:700;font-size:.85rem;">${DAY_TYPE_ICON[s.day_type]||'✨'} ${label}</div>
+      ${extraNotes ? `<div style="font-size:.72rem;color:var(--muted);margin-top:3px;">${extraNotes}</div>` : ''}
+    </div>`;
+  }).join('');
+}
+
+// ── SESIÓN PASADA (registrar entrenamientos hechos fuera de la app) ──
+let logPastMode = 'day', logPastType = 'gym';
+function openLogPast(){
+  const todayStr = new Date().toISOString().slice(0,10);
+  document.getElementById('logPastDate').value = todayStr;
+  document.getElementById('logPastDate').max = todayStr;
+  document.getElementById('logPastDaySelect').innerHTML = DAYS.map(d => `<option value="${d.id}">${DAY_TYPE_ICON[d.day_type]} ${d.name}</option>`).join('');
+  document.getElementById('logPastCustomLabel').value = '';
+  document.getElementById('logPastNotes').value = '';
+  pickLogPastMode('day');
+  pickLogPastType('gym');
+  document.getElementById('logPastOverlay').classList.add('show');
+}
+function closeLogPast(){ document.getElementById('logPastOverlay').classList.remove('show'); }
+function pickLogPastMode(mode){
+  logPastMode = mode;
+  document.querySelectorAll('#logPastModePick button').forEach(b => b.classList.toggle('active', b.dataset.mode === mode));
+  document.getElementById('logPastDaySelect').classList.toggle('hidden', mode !== 'day');
+  document.getElementById('logPastCustomLabel').classList.toggle('hidden', mode !== 'custom');
+  document.getElementById('logPastCustomType').classList.toggle('hidden', mode !== 'custom');
+}
+function pickLogPastType(type){
+  logPastType = type;
+  document.querySelectorAll('#logPastCustomType button').forEach(b => b.classList.toggle('active', b.dataset.type === type));
+}
+async function saveLogPast(){
+  const date = document.getElementById('logPastDate').value;
+  if(!date) return;
+  const payload = { user_id: currentUser.id, session_date: date, completed: true };
+  if(logPastMode === 'day'){
+    const dayId = document.getElementById('logPastDaySelect').value;
+    const d = DAYS.find(x => x.id === dayId);
+    if(!d){ showToast('⚠️ Primero crea al menos un día'); return; }
+    payload.day_id = dayId;
+    payload.day_type = d.day_type;
+    payload.notes = document.getElementById('logPastNotes').value.trim() || null;
+  } else {
+    const label = document.getElementById('logPastCustomLabel').value.trim();
+    if(!label){ showToast('⚠️ Escribe un nombre para la sesión'); return; }
+    const extra = document.getElementById('logPastNotes').value.trim();
+    payload.day_id = null;
+    payload.day_type = logPastType;
+    payload.notes = extra ? `${label} — ${extra}` : label;
+  }
+  const { error } = await sb.from('sessions').insert(payload);
+  if(error){ showToast('⚠️ ' + error.message); return; }
+  closeLogPast();
+  showToast('✅ Sesión registrada');
+  renderCalendar();
+  await loadDays();
+}
+
+// ═══════════════════════════════════════════
+// SUPLEMENTOS
+// ═══════════════════════════════════════════
+let SUPPLEMENTS = [];
+async function loadSupplements(){
+  const { data } = await sb.from('supplements').select('*').eq('user_id', currentUser.id).eq('active', true).order('sort_order');
+  SUPPLEMENTS = data || [];
+  await renderSupplements();
+}
+async function renderSupplements(){
+  const box = document.getElementById('supplementsList');
+  if(!SUPPLEMENTS.length){
+    box.innerHTML = `<div class="empty-state"><div class="big">💊</div>Todavía no tienes suplementos agregados.</div>`;
+    return;
+  }
+  const todayStr = new Date().toISOString().slice(0,10);
+  const days7 = [];
+  for(let i=6; i>=0; i--){ const d = new Date(); d.setDate(d.getDate()-i); days7.push(d.toISOString().slice(0,10)); }
+  const weekAgoStr = days7[0];
+
+  const { data: logs } = await sb.from('supplement_logs').select('*').eq('user_id', currentUser.id).gte('log_date', weekAgoStr).lte('log_date', todayStr);
+  const logMap = {};
+  (logs||[]).forEach(l => {
+    if(!logMap[l.supplement_id]) logMap[l.supplement_id] = new Set();
+    if(l.taken) logMap[l.supplement_id].add(l.log_date);
+  });
+
+  box.innerHTML = SUPPLEMENTS.map(s => {
+    const takenSet = logMap[s.id] || new Set();
+    const takenToday = takenSet.has(todayStr);
+    const dots = days7.map(d => {
+      const taken = takenSet.has(d);
+      const isToday = d === todayStr;
+      return `<div style="flex:1;height:18px;border-radius:5px;background:${taken?'var(--green)':'var(--surface)'};border:1px solid ${isToday?'var(--accent)':'var(--border)'};"></div>`;
+    }).join('');
+    return `
+      <div class="day-card" style="padding:12px 14px;">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <button class="icon-btn" style="width:38px;height:38px;font-size:1.05rem;background:${takenToday?'var(--green)':'var(--surface)'};color:${takenToday?'#000':'var(--muted)'};border-color:${takenToday?'var(--green)':'var(--border)'};" onclick="toggleSupplementToday('${s.id}')">${takenToday?'✓':'💊'}</button>
+          <div style="flex:1;">
+            <div style="font-weight:700;font-size:.86rem;">${s.name}</div>
+            <div style="font-size:.68rem;color:var(--muted);">${s.dose || 'Toca el ícono para marcar hoy'}</div>
+          </div>
+          <button class="icon-btn" onclick="deleteSupplement('${s.id}')">🗑</button>
+        </div>
+        <div style="display:flex;gap:4px;margin-top:10px;">${dots}</div>
+      </div>`;
+  }).join('');
+}
+async function toggleSupplementToday(suppId){
+  const todayStr = new Date().toISOString().slice(0,10);
+  const { data: existing } = await sb.from('supplement_logs').select('*').eq('supplement_id', suppId).eq('log_date', todayStr).maybeSingle();
+  if(existing){
+    await sb.from('supplement_logs').delete().eq('id', existing.id);
+  } else {
+    await sb.from('supplement_logs').insert({ user_id: currentUser.id, supplement_id: suppId, log_date: todayStr, taken: true });
+  }
+  await renderSupplements();
+}
+function openAddSupplement(){
+  document.getElementById('suppName').value = '';
+  document.getElementById('suppDose').value = '';
+  document.getElementById('suppOverlay').classList.add('show');
+}
+function closeSuppSheet(){ document.getElementById('suppOverlay').classList.remove('show'); }
+async function saveSupplement(){
+  const name = document.getElementById('suppName').value.trim();
+  if(!name) return;
+  const dose = document.getElementById('suppDose').value.trim();
+  const sort_order = SUPPLEMENTS.length ? Math.max(...SUPPLEMENTS.map(s=>s.sort_order))+1 : 0;
+  await sb.from('supplements').insert({ user_id: currentUser.id, name, dose: dose || null, sort_order });
+  closeSuppSheet();
+  await loadSupplements();
+  showToast('✅ Suplemento agregado');
+}
+async function deleteSupplement(id){
+  if(!confirm('¿Eliminar este suplemento?')) return;
+  await sb.from('supplements').update({ active:false }).eq('id', id);
+  await loadSupplements();
 }
 </script>
 </body>
