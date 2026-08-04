@@ -178,7 +178,19 @@
 
   <!-- TAB: PROGRESO -->
   <div class="tab-panel" id="panel-progreso">
-    <div class="stub-note">📈 Gráfico y tabla de progreso por ejercicio<br>— lo armamos en la próxima sesión.</div>
+    <select id="progressExSelect" onchange="loadProgressChart()" style="width:100%;background:var(--card);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:10px 12px;font-size:.85rem;margin-bottom:14px;"></select>
+    <div id="progressEmpty" class="empty-state"><div class="big">📈</div>Elige un ejercicio para ver su progreso.</div>
+    <div id="progressChartWrap" class="hidden">
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:14px;">
+        <canvas id="progressCanvas" height="180"></canvas>
+      </div>
+      <table style="width:100%;border-collapse:collapse;font-size:.78rem;">
+        <thead><tr style="color:var(--muted);text-align:left;border-bottom:1px solid var(--border);">
+          <th style="padding:6px 4px;">Fecha</th><th style="padding:6px 4px;">Serie</th><th style="padding:6px 4px;">Peso</th><th style="padding:6px 4px;">Reps</th>
+        </tr></thead>
+        <tbody id="progressTableBody"></tbody>
+      </table>
+    </div>
   </div>
 
   <!-- TAB: CALENDARIO -->
@@ -219,9 +231,23 @@
 <div class="sheet-overlay" id="addExOverlay" onclick="if(event.target===this)closeAddEx()">
   <div class="sheet">
     <div class="sheet-head"><h3>＋ Agregar ejercicio</h3><button class="icon-btn" onclick="closeAddEx()">✕</button></div>
+    <button class="sheet-btn" style="background:var(--surface);border:1px solid var(--yellow);color:var(--yellow);margin-bottom:12px;" onclick="openWarmupPicker()">🔥 Calentamiento / movilidad rápida</button>
+    <div class="type-pick" id="exCategoryPick">
+      <button data-cat="strength" onclick="pickExCategory('strength')">💪 Fuerza</button>
+      <button data-cat="warmup" onclick="pickExCategory('warmup')">🔥 Calentamiento</button>
+      <button data-cat="stretch" onclick="pickExCategory('stretch')">🧘 Estiramiento</button>
+    </div>
     <input type="text" id="addExManual" placeholder="Nombre manual...">
     <button class="sheet-btn" style="margin-bottom:10px;" onclick="addExManual()">＋ Agregar nombre manual</button>
     <button class="sheet-btn" style="background:var(--surface);border:1px solid var(--accent3);color:var(--accent3);" onclick="openExDb()">🔍 Buscar en base de datos (1.300+)</button>
+  </div>
+</div>
+
+<!-- WARMUP QUICK-ADD SHEET -->
+<div class="sheet-overlay" id="warmupOverlay" onclick="if(event.target===this)closeWarmupPicker()">
+  <div class="sheet">
+    <div class="sheet-head"><h3>🔥 Calentamiento rápido</h3><button class="icon-btn" onclick="closeWarmupPicker()">✕</button></div>
+    <div id="warmupList"></div>
   </div>
 </div>
 
@@ -356,6 +382,70 @@ function switchTab(name){
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
   document.getElementById('panel-' + name).classList.add('active');
   document.querySelector(`.tab-btn[data-tab="${name}"]`).classList.add('active');
+  if(name === 'progreso') loadProgressExerciseList();
+}
+
+// ═══════════════════════════════════════════
+// PROGRESO (gráfico + tabla por ejercicio)
+// ═══════════════════════════════════════════
+let progressChartInstance = null;
+function loadProgressExerciseList(){
+  const opts = [];
+  DAYS.forEach(d => d.exercises.filter(ex => (ex.category||'strength')==='strength').forEach(ex => opts.push({ id: ex.id, label: `${ex.name} (${d.name})` })));
+  const sel = document.getElementById('progressExSelect');
+  const prevVal = sel.value;
+  sel.innerHTML = '<option value="">Elige un ejercicio...</option>' + opts.map(o => `<option value="${o.id}">${o.label}</option>`).join('');
+  if(opts.some(o => o.id === prevVal)){ sel.value = prevVal; loadProgressChart(); }
+}
+async function loadProgressChart(){
+  const exId = document.getElementById('progressExSelect').value;
+  const wrap = document.getElementById('progressChartWrap');
+  const empty = document.getElementById('progressEmpty');
+  if(!exId){ wrap.classList.add('hidden'); empty.classList.remove('hidden'); return; }
+  const { data: logs, error } = await sb.from('set_logs').select('*').eq('exercise_id', exId).order('logged_at');
+  if(error || !logs || !logs.length){
+    wrap.classList.add('hidden');
+    empty.classList.remove('hidden');
+    empty.innerHTML = `<div class="big">📈</div>Todavía no has registrado series de este ejercicio.`;
+    return;
+  }
+  empty.classList.add('hidden');
+  wrap.classList.remove('hidden');
+
+  // agrupar por día, usando el peso máximo registrado ese día (top set)
+  const byDate = {};
+  logs.forEach(l => {
+    const d = l.logged_at.slice(0,10);
+    const w = l.weight || 0;
+    if(!(d in byDate) || w > byDate[d]) byDate[d] = w;
+  });
+  const labels = Object.keys(byDate).sort();
+  const data = labels.map(d => byDate[d]);
+
+  if(progressChartInstance) progressChartInstance.destroy();
+  const ctx = document.getElementById('progressCanvas').getContext('2d');
+  progressChartInstance = new Chart(ctx, {
+    type: 'line',
+    data: { labels, datasets: [{ label:'Peso máx (kg)', data, borderColor:'#3ddc97', backgroundColor:'rgba(61,220,151,.15)', tension:.3, fill:true, pointRadius:3 }] },
+    options: {
+      responsive: true,
+      plugins: { legend: { display:false } },
+      scales: {
+        x: { ticks:{ color:'#8b8f9a', font:{size:10} }, grid:{ color:'#262a33' } },
+        y: { ticks:{ color:'#8b8f9a', font:{size:10} }, grid:{ color:'#262a33' } }
+      }
+    }
+  });
+
+  const tbody = document.getElementById('progressTableBody');
+  tbody.innerHTML = logs.slice().reverse().map(l => `
+    <tr style="border-bottom:1px solid var(--border);">
+      <td style="padding:6px 4px;">${l.logged_at.slice(0,10)}</td>
+      <td style="padding:6px 4px;">${l.serie_number}</td>
+      <td style="padding:6px 4px;">${l.weight ?? '—'}</td>
+      <td style="padding:6px 4px;">${l.reps ?? '—'}</td>
+    </tr>
+  `).join('');
 }
 
 // ═══════════════════════════════════════════
@@ -459,15 +549,10 @@ async function deleteDay(id){
 }
 
 // ── EXERCISES ──
-function renderExercisesForDay(dayId){
-  const d = DAYS.find(x => x.id === dayId);
-  const box = document.getElementById('exlist-' + dayId);
-  if(!box) return;
-  if(!d.exercises.length){
-    box.innerHTML = `<div class="empty-state" style="padding:16px;">Sin ejercicios todavía.</div>`;
-    return;
-  }
-  box.innerHTML = d.exercises.map(ex => `
+const CATEGORY_LABEL = { warmup:'🔥 Calentamiento / movilidad', strength:'💪 Ejercicios', stretch:'🧘 Estiramiento' };
+const CATEGORY_ORDER = ['warmup','strength','stretch'];
+function renderExerciseCard(ex, dayId){
+  return `
     <div class="ex-card" id="excard-${ex.id}">
       <div class="ex-head" onclick="toggleExDetail('${ex.id}')">
         ${ex.img ? `<img class="ex-thumb" src="${ex.img}" onerror="this.style.display='none'">` : ''}
@@ -486,8 +571,24 @@ function renderExercisesForDay(dayId){
           <button class="ex-btn-sm danger" onclick="deleteExercise('${ex.id}','${dayId}')">🗑 Quitar</button>
         </div>
       </div>
-    </div>
-  `).join('');
+    </div>`;
+}
+function renderExercisesForDay(dayId){
+  const d = DAYS.find(x => x.id === dayId);
+  const box = document.getElementById('exlist-' + dayId);
+  if(!box) return;
+  if(!d.exercises.length){
+    box.innerHTML = `<div class="empty-state" style="padding:16px;">Sin ejercicios todavía.</div>`;
+    return;
+  }
+  let html = '';
+  CATEGORY_ORDER.forEach(cat => {
+    const group = d.exercises.filter(ex => (ex.category || 'strength') === cat);
+    if(!group.length) return;
+    html += `<div style="font-size:.68rem;color:var(--muted);letter-spacing:1px;text-transform:uppercase;margin:10px 0 6px;">${CATEGORY_LABEL[cat]}</div>`;
+    html += group.map(ex => renderExerciseCard(ex, dayId)).join('');
+  });
+  box.innerHTML = html;
   d.exercises.forEach(ex => renderSetRows(ex.id));
 }
 function toggleExDetail(exId){
@@ -530,18 +631,60 @@ async function saveSet(exId, serieNum){
 }
 
 let addExContext = null; // dayId
+let pickedExCategory = 'strength';
 function openAddEx(dayId){
   addExContext = dayId;
   document.getElementById('addExManual').value = '';
+  pickExCategory('strength');
   document.getElementById('addExOverlay').classList.add('show');
 }
 function closeAddEx(){ document.getElementById('addExOverlay').classList.remove('show'); }
+function pickExCategory(cat){
+  pickedExCategory = cat;
+  document.querySelectorAll('#exCategoryPick button').forEach(b => b.classList.toggle('active', b.dataset.cat === cat));
+}
 async function addExManual(){
   const name = document.getElementById('addExManual').value.trim();
   if(!name) return;
-  await insertExercise(addExContext, { name, series:3, reps:'10', rest_sec:60 });
+  await insertExercise(addExContext, { name, series:3, reps:'10', rest_sec:60, category: pickedExCategory });
   closeAddEx();
 }
+
+// ── CALENTAMIENTO RÁPIDO ──
+const WARMUP_TEMPLATES = [
+  { name:'Rotación de tobillos', reps:'10/lado' },
+  { name:'Círculos de cadera', reps:'10/lado' },
+  { name:'Elevación de rodillas caminando', reps:'10/lado' },
+  { name:'Talón a glúteo caminando', reps:'10/lado' },
+  { name:'Zancada con giro de tronco', reps:'8/lado' },
+  { name:'Apertura y cierre de cadera (worlds greatest stretch)', reps:'6/lado' },
+  { name:'Skipping bajo', reps:'20 seg' },
+  { name:'Puente de glúteo — activación', reps:'12' },
+  { name:'Plancha lateral — activación', reps:'20 seg/lado' },
+  { name:'Saltos verticales suaves', reps:'8' },
+  { name:'Carioca lateral', reps:'15 m/lado' },
+  { name:'Sprint progresivo corto', reps:'2×15 m' },
+];
+function openWarmupPicker(){
+  closeAddEx();
+  const box = document.getElementById('warmupList');
+  box.innerHTML = WARMUP_TEMPLATES.map((w,i) => `
+    <div class="exdb-card" onclick="addWarmupTemplate(${i})">
+      <div style="flex:1;">
+        <div class="exdb-name">${w.name}</div>
+        <div class="exdb-meta">${w.reps}</div>
+      </div>
+      <button class="exdb-add" onclick="event.stopPropagation();addWarmupTemplate(${i})">＋</button>
+    </div>
+  `).join('');
+  document.getElementById('warmupOverlay').classList.add('show');
+}
+function closeWarmupPicker(){ document.getElementById('warmupOverlay').classList.remove('show'); }
+async function addWarmupTemplate(i){
+  const w = WARMUP_TEMPLATES[i];
+  await insertExercise(addExContext, { name:w.name, series:1, reps:w.reps, rest_sec:0, category:'warmup' });
+}
+
 async function insertExercise(dayId, fields){
   const d = DAYS.find(x => x.id === dayId);
   const sort_order = d.exercises.length ? Math.max(...d.exercises.map(e=>e.sort_order))+1 : 0;
@@ -648,6 +791,7 @@ async function loadExDb(){
   return EXDB;
 }
 async function openExDb(){
+  closeAddEx();
   await loadExDb();
   const catSel = document.getElementById('exDbCategory');
   const eqSel = document.getElementById('exDbEquipment');
