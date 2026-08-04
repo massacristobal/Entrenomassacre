@@ -170,10 +170,31 @@
     </div>
   </div>
 
+  <!-- TAB: INICIO -->
+  <div class="tab-panel active" id="panel-inicio">
+    <h2 id="inicioGreeting" style="font-size:1.3rem;margin-bottom:14px;"></h2>
+    <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:5px;margin-bottom:8px;" id="inicioWeekStrip"></div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;font-size:.6rem;color:var(--muted);margin-bottom:18px;">
+      <span>🟩 Hecho</span><span>┅ Planificado</span><span style="color:var(--danger)">🟥 Atrasado</span>
+    </div>
+    <div style="display:flex;gap:10px;margin-bottom:18px;">
+      <div style="flex:1;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px;text-align:center;">
+        <div id="inicioWeekStat" style="font-family:'Bebas Neue',sans-serif;font-size:1.8rem;color:var(--accent);">0/0</div>
+        <div style="font-size:.66rem;color:var(--muted);text-transform:uppercase;">Esta semana</div>
+      </div>
+      <div style="flex:1;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px;text-align:center;">
+        <div id="inicioMonthStat" style="font-family:'Bebas Neue',sans-serif;font-size:1.8rem;color:var(--accent3);">0</div>
+        <div style="font-size:.66rem;color:var(--muted);text-transform:uppercase;">Este mes</div>
+      </div>
+    </div>
+    <div id="inicioTodayBox"></div>
+  </div>
+
   <!-- TAB: RUTINA -->
-  <div class="tab-panel active" id="panel-rutina">
+  <div class="tab-panel" id="panel-rutina">
     <div id="daysList"></div>
     <button class="add-btn" onclick="openAddDay()">＋ Agregar día</button>
+    <button class="add-btn" style="border-style:solid;border-color:var(--yellow);color:var(--yellow);margin-top:8px;" onclick="loadSuggestedRoutine()">⚡ Cargar rutina sugerida (fútbol + unilateral)</button>
   </div>
 
   <!-- TAB: PROGRESO -->
@@ -206,8 +227,8 @@
       <button class="icon-btn" onclick="calShiftMonth(1)">›</button>
     </div>
     <div id="calGrid" style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:6px;"></div>
-    <div style="display:flex;gap:12px;flex-wrap:wrap;font-size:.62rem;color:var(--muted);margin-bottom:14px;">
-      <span>🟢 Gym</span><span>🔵 Fútbol</span><span>🟡 Descanso</span><span>🟣 Otro</span>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;font-size:.6rem;color:var(--muted);margin-bottom:14px;">
+      <span>🟩 Hecho</span><span>┅ Planificado</span><span style="color:var(--danger)">🟥 Atrasado</span>
     </div>
     <div id="calDayDetail" class="empty-state" style="padding:16px;">Toca un día para ver el detalle.</div>
     <button class="add-btn" onclick="openLogPast()">＋ Agregar sesión pasada</button>
@@ -222,11 +243,13 @@
 
 <!-- TAB BAR -->
 <div id="tabbar" class="hidden">
-  <button class="tab-btn active" data-tab="rutina" onclick="switchTab('rutina')"><span class="ic">🏋️</span>Rutina</button>
+  <button class="tab-btn active" data-tab="inicio" onclick="switchTab('inicio')"><span class="ic">🏠</span>Inicio</button>
+  <button class="tab-btn" data-tab="rutina" onclick="switchTab('rutina')"><span class="ic">🏋️</span>Rutina</button>
   <button class="tab-btn" data-tab="progreso" onclick="switchTab('progreso')"><span class="ic">📈</span>Progreso</button>
   <button class="tab-btn" data-tab="calendario" onclick="switchTab('calendario')"><span class="ic">📅</span>Calendario</button>
   <button class="tab-btn" data-tab="suplementos" onclick="switchTab('suplementos')"><span class="ic">💊</span>Suplementos</button>
 </div>
+
 
 <!-- ADD/EDIT DAY SHEET -->
 <div class="sheet-overlay" id="dayOverlay" onclick="if(event.target===this)closeDaySheet()">
@@ -239,6 +262,8 @@
       <button data-type="rest" onclick="pickDayType('rest')">🚶 Descanso</button>
       <button data-type="custom" onclick="pickDayType('custom')">✨ Otro</button>
     </div>
+    <div style="font-size:.68rem;color:var(--muted);letter-spacing:1px;text-transform:uppercase;margin-bottom:6px;">¿Qué días de la semana? (opcional)</div>
+    <div class="type-pick" id="dayWeekdayPick" style="margin-bottom:14px;"></div>
     <button class="sheet-btn" onclick="saveDaySheet()">Guardar</button>
   </div>
 </div>
@@ -271,6 +296,11 @@
     <div class="sheet-head"><h3>＋ Suplemento</h3><button class="icon-btn" onclick="closeSuppSheet()">✕</button></div>
     <input type="text" id="suppName" placeholder="Nombre (ej: Creatina)">
     <input type="text" id="suppDose" placeholder="Dosis (opcional, ej: 5g)">
+    <div class="type-pick" id="suppFreqPick">
+      <button data-freq="daily" onclick="pickSuppFreq('daily')">📅 Todos los días</button>
+      <button data-freq="weekdays" onclick="pickSuppFreq('weekdays')">🗓️ Días específicos</button>
+    </div>
+    <div class="type-pick hidden" id="suppWeekdayPick"></div>
     <button class="sheet-btn" onclick="saveSupplement()">Guardar</button>
   </div>
 </div>
@@ -416,6 +446,7 @@ async function onLoggedIn(user){
   const label = (user.email || '?')[0].toUpperCase();
   document.getElementById('userAvatar').textContent = label;
   await loadDays();
+  renderInicio();
 }
 (async function initAuth(){
   const { data } = await sb.auth.getSession();
@@ -430,6 +461,7 @@ function switchTab(name){
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
   document.getElementById('panel-' + name).classList.add('active');
   document.querySelector(`.tab-btn[data-tab="${name}"]`).classList.add('active');
+  if(name === 'inicio') renderInicio();
   if(name === 'progreso') loadProgressExerciseList();
   if(name === 'calendario') renderCalendar();
   if(name === 'suplementos') loadSupplements();
@@ -533,6 +565,12 @@ async function loadDays(){
   renderDays();
 }
 
+function weekdaysLabel(weekdays){
+  if(!weekdays || !weekdays.length) return '';
+  const order = [1,2,3,4,5,6,0];
+  const labels = {1:'L',2:'M',3:'M',4:'J',5:'V',6:'S',0:'D'};
+  return ' · ' + order.filter(v => weekdays.includes(v)).map(v => labels[v]).join(' ');
+}
 function renderDays(){
   const box = document.getElementById('daysList');
   if(!DAYS.length){
@@ -545,7 +583,7 @@ function renderDays(){
         <span class="day-type-badge">${DAY_TYPE_ICON[d.day_type]||'✨'}</span>
         <div style="flex:1;cursor:pointer;" onclick="toggleDay('${d.id}')">
           <div class="day-name">${d.name}</div>
-          <div class="day-count">${d.exercises.length} ejercicio${d.exercises.length===1?'':'s'} ${d.doneToday ? '· ✅ hecho hoy' : ''}</div>
+          <div class="day-count">${d.exercises.length} ejercicio${d.exercises.length===1?'':'s'}${weekdaysLabel(d.weekdays)} ${d.doneToday ? '· ✅ hecho hoy' : ''}</div>
         </div>
         <div class="day-actions">
           <button class="icon-btn" onclick="openEditDay('${d.id}')">✎</button>
@@ -570,11 +608,23 @@ function toggleDay(id){
 }
 
 // ── ADD / EDIT / DELETE DAY ──
-let editingDayId = null, pickedDayType = 'gym';
+const WEEKDAY_DEFS = [ {label:'L',val:1}, {label:'M',val:2}, {label:'M',val:3}, {label:'J',val:4}, {label:'V',val:5}, {label:'S',val:6}, {label:'D',val:0} ];
+let editingDayId = null, pickedDayType = 'gym', pickedWeekdays = new Set();
+function renderDayWeekdayPicker(){
+  document.getElementById('dayWeekdayPick').innerHTML = WEEKDAY_DEFS.map(w => `
+    <button data-wd="${w.val}" onclick="toggleDayWeekday(${w.val})" class="${pickedWeekdays.has(w.val)?'active':''}" style="min-width:0;flex:1;">${w.label}</button>
+  `).join('');
+}
+function toggleDayWeekday(val){
+  if(pickedWeekdays.has(val)) pickedWeekdays.delete(val); else pickedWeekdays.add(val);
+  renderDayWeekdayPicker();
+}
 function openAddDay(){
   editingDayId = null;
   document.getElementById('daySheetTitle').textContent = '＋ Nuevo día';
   document.getElementById('dayNameInput').value = '';
+  pickedWeekdays = new Set();
+  renderDayWeekdayPicker();
   pickDayType('gym');
   document.getElementById('dayOverlay').classList.add('show');
 }
@@ -584,6 +634,8 @@ function openEditDay(id){
   editingDayId = id;
   document.getElementById('daySheetTitle').textContent = '✎ Editar día';
   document.getElementById('dayNameInput').value = d.name;
+  pickedWeekdays = new Set(d.weekdays || []);
+  renderDayWeekdayPicker();
   pickDayType(d.day_type);
   document.getElementById('dayOverlay').classList.add('show');
 }
@@ -595,15 +647,61 @@ function pickDayType(type){
 async function saveDaySheet(){
   const name = document.getElementById('dayNameInput').value.trim();
   if(!name) return;
+  const weekdays = Array.from(pickedWeekdays);
   if(editingDayId){
-    await sb.from('days').update({ name, day_type: pickedDayType }).eq('id', editingDayId);
+    await sb.from('days').update({ name, day_type: pickedDayType, weekdays }).eq('id', editingDayId);
   } else {
     const sort_order = DAYS.length ? Math.max(...DAYS.map(d=>d.sort_order))+1 : 0;
-    await sb.from('days').insert({ user_id: currentUser.id, name, day_type: pickedDayType, sort_order });
+    await sb.from('days').insert({ user_id: currentUser.id, name, day_type: pickedDayType, weekdays, sort_order });
   }
   closeDaySheet();
   await loadDays();
   showToast('✅ Día guardado');
+}
+// ── RUTINA SUGERIDA (plantilla precargada, fútbol + fuerza unilateral) ──
+const SUGGESTED_ROUTINE = [
+  { name:'Día A — Tren inferior unilateral', day_type:'gym', weekdays:[2], exercises:[
+    {name:'Sentadilla búlgara', series:4, reps:'8/pierna', rest_sec:90},
+    {name:'Peso muerto rumano a una pierna', series:4, reps:'8/pierna', rest_sec:90},
+    {name:'Zancada lateral', series:3, reps:'10/pierna', rest_sec:60},
+    {name:'Hip thrust a una pierna', series:3, reps:'12/pierna', rest_sec:60},
+    {name:'Nordic curl (isquios)', series:3, reps:'6-8', rest_sec:90},
+    {name:'Pallof press (core anti-rotación)', series:3, reps:'10/lado', rest_sec:45},
+  ]},
+  { name:'Día B — Tren superior + core', day_type:'gym', weekdays:[4], exercises:[
+    {name:'Press banca o militar', series:4, reps:'8', rest_sec:90},
+    {name:'Remo a una mano', series:3, reps:'10/lado', rest_sec:60},
+    {name:'Dominadas o jalón', series:3, reps:'8', rest_sec:90},
+    {name:'Face pull', series:3, reps:'12', rest_sec:45},
+    {name:'Plancha + variantes', series:3, reps:'30-45 seg', rest_sec:45},
+  ]},
+  { name:'Día C — Potencia y agilidad', day_type:'gym', weekdays:[6], exercises:[
+    {name:'Saltos a una pierna', series:4, reps:'5/pierna', rest_sec:90},
+    {name:'Sentadilla a una pierna con salto suave', series:3, reps:'6/pierna', rest_sec:90},
+    {name:'Sprint corto con cambio de dirección', series:6, reps:'15-20 m', rest_sec:60},
+    {name:'Escalera de agilidad', series:3, reps:'20 seg', rest_sec:45},
+    {name:'Russian twist con peso', series:3, reps:'15', rest_sec:45},
+  ]},
+  { name:'Día D — Prevención (ingle / isquios)', day_type:'gym', weekdays:[], exercises:[
+    {name:'Copenhagen plank', series:3, reps:'20-30 seg/lado', rest_sec:45},
+    {name:'Nordic curl progresivo', series:3, reps:'6-8', rest_sec:60},
+    {name:'Movilidad de cadera 90/90', series:2, reps:'8/lado', rest_sec:30},
+  ]},
+];
+async function loadSuggestedRoutine(){
+  if(!confirm('Esto va a crear 4 días nuevos con ejercicios precargados (no borra lo que ya tienes). ¿Continuar?')) return;
+  for(const dayDef of SUGGESTED_ROUTINE){
+    const sort_order = DAYS.length ? Math.max(...DAYS.map(d=>d.sort_order))+1 : 0;
+    const { data: newDay, error } = await sb.from('days').insert({ user_id: currentUser.id, name: dayDef.name, day_type: dayDef.day_type, weekdays: dayDef.weekdays, sort_order }).select().single();
+    if(error || !newDay) continue;
+    let i = 0;
+    for(const ex of dayDef.exercises){
+      await sb.from('exercises').insert({ day_id: newDay.id, user_id: currentUser.id, name: ex.name, series: ex.series, reps: ex.reps, rest_sec: ex.rest_sec, category:'strength', tempo:'Controlado', cues: [], sort_order: i++ });
+    }
+    DAYS.push({ ...newDay, exercises: [], doneToday: false });
+  }
+  await loadDays();
+  showToast('✅ Rutina cargada — 4 días nuevos');
 }
 async function deleteDay(id){
   if(!confirm('¿Eliminar este día y todos sus ejercicios?')) return;
@@ -1076,31 +1174,67 @@ async function renderCalendar(){
   for(let i=0; i<startWeekday; i++) cellsHtml += `<div></div>`;
   for(let d=1; d<=daysInMonth; d++){
     const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-    const daySessions = calSessionsCache[dateStr] || [];
+    const weekday = new Date(year, month, d).getDay();
+    const st = getDateStatus(dateStr, weekday, todayStr);
     const isToday = dateStr === todayStr;
-    let bg = 'var(--card)';
-    if(daySessions.length) bg = CAL_TYPE_COLOR[daySessions[0].day_type] || '#a855f7';
-    cellsHtml += `<div onclick="showCalDay('${dateStr}')" style="aspect-ratio:1;border-radius:7px;background:${bg};display:flex;align-items:center;justify-content:center;font-size:.72rem;font-weight:${daySessions.length?'700':'400'};color:${daySessions.length?'#000':'var(--muted)'};cursor:pointer;box-sizing:border-box;${isToday?'border:2px solid var(--text);':'border:1px solid var(--border);'}">${d}</div>`;
+    let style = 'background:var(--card);color:var(--muted);border:1px solid var(--border);';
+    if(st.status === 'done') style = `background:${st.color};color:#000;border:1px solid ${st.color};font-weight:700;`;
+    else if(st.status === 'pending') style = `background:var(--card);color:${st.color};border:2px dashed ${st.color};font-weight:700;`;
+    else if(st.status === 'missed') style = `background:rgba(239,68,68,.12);color:var(--danger);border:1px solid var(--danger);font-weight:700;`;
+    if(isToday) style += 'box-shadow:0 0 0 2px var(--text) inset;';
+    cellsHtml += `<div onclick="showCalDay('${dateStr}')" style="aspect-ratio:1;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:.72rem;cursor:pointer;box-sizing:border-box;${style}">${d}</div>`;
   }
   document.getElementById('calGrid').innerHTML = headers + cellsHtml;
   document.getElementById('calDayDetail').innerHTML = `Toca un día para ver el detalle.`;
 }
+// Determina el estado de una fecha: hecho / planificado (pendiente, hoy o futuro) / atrasado (planificado y no cumplido, ya pasó) / sin plan
+function getDateStatus(dateStr, weekday, todayStr){
+  const sessions = calSessionsCache[dateStr] || [];
+  const plannedDays = DAYS.filter(d => (d.weekdays||[]).includes(weekday));
+  if(sessions.length) return { status:'done', color: CAL_TYPE_COLOR[sessions[0].day_type] || '#a855f7' };
+  if(plannedDays.length){
+    if(dateStr < todayStr) return { status:'missed', color:'var(--danger)' };
+    return { status:'pending', color: CAL_TYPE_COLOR[plannedDays[0].day_type] || '#a855f7' };
+  }
+  return { status:'none', color:null };
+}
 function showCalDay(dateStr){
   const sessions = calSessionsCache[dateStr] || [];
+  const weekday = new Date(dateStr + 'T00:00:00').getDay();
+  const doneDayIds = new Set(sessions.map(s => s.day_id).filter(Boolean));
+  const plannedPending = DAYS.filter(d => (d.weekdays||[]).includes(weekday) && !doneDayIds.has(d.id));
   const box = document.getElementById('calDayDetail');
-  if(!sessions.length){
-    box.innerHTML = `<div style="font-size:.78rem;color:var(--muted);">Nada registrado el ${dateStr}.</div>`;
-    return;
+  let html = `<div style="font-size:.7rem;color:var(--muted);margin-bottom:8px;letter-spacing:1px;text-transform:uppercase;">${dateStr}</div>`;
+  if(!sessions.length && !plannedPending.length){
+    html += `<div style="font-size:.78rem;color:var(--muted);">Nada planificado ni registrado.</div>`;
   }
-  box.innerHTML = `<div style="font-size:.7rem;color:var(--muted);margin-bottom:8px;letter-spacing:1px;text-transform:uppercase;">${dateStr}</div>` + sessions.map(s => {
+  sessions.forEach(s => {
     const d = DAYS.find(x => x.id === s.day_id);
     const label = d ? d.name : (s.notes ? s.notes.split(' — ')[0] : 'Sesión suelta');
     const extraNotes = d ? s.notes : (s.notes && s.notes.includes(' — ') ? s.notes.split(' — ').slice(1).join(' — ') : '');
-    return `<div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:6px;">
-      <div style="font-weight:700;font-size:.85rem;">${DAY_TYPE_ICON[s.day_type]||'✨'} ${label}</div>
+    html += `<div style="background:var(--card);border:1px solid var(--green);border-radius:10px;padding:10px 12px;margin-bottom:6px;">
+      <div style="font-weight:700;font-size:.85rem;color:var(--green);">✅ ${DAY_TYPE_ICON[s.day_type]||'✨'} ${label}</div>
       ${extraNotes ? `<div style="font-size:.72rem;color:var(--muted);margin-top:3px;">${extraNotes}</div>` : ''}
     </div>`;
-  }).join('');
+  });
+  plannedPending.forEach(d => {
+    const isPast = dateStr < new Date().toISOString().slice(0,10);
+    html += `<div style="background:var(--card);border:1px ${isPast?'solid var(--danger)':'dashed var(--border)'};border-radius:10px;padding:10px 12px;margin-bottom:6px;display:flex;align-items:center;gap:10px;">
+      <div style="flex:1;font-weight:700;font-size:.85rem;color:${isPast?'var(--danger)':'var(--muted)'};">${DAY_TYPE_ICON[d.day_type]} ${d.name} <span style="font-weight:400;">— ${isPast?'atrasado':'planificado'}</span></div>
+      <button class="ex-btn-sm timer" style="flex:none;padding:6px 10px;" onclick="markPlannedDone('${d.id}','${dateStr}')">✅ Marcar hecho</button>
+    </div>`;
+  });
+  box.innerHTML = html;
+}
+async function markPlannedDone(dayId, dateStr){
+  const d = DAYS.find(x => x.id === dayId);
+  if(!d) return;
+  const { error } = await sb.from('sessions').insert({ user_id: currentUser.id, day_id: dayId, session_date: dateStr, day_type: d.day_type, completed: true });
+  if(error){ showToast('⚠️ ' + error.message); return; }
+  showToast('✅ Sesión registrada');
+  await renderCalendar();
+  showCalDay(dateStr);
+  await loadDays();
 }
 
 // ── SESIÓN PASADA (registrar entrenamientos hechos fuera de la app) ──
@@ -1159,6 +1293,23 @@ async function saveLogPast(){
 // SUPLEMENTOS
 // ═══════════════════════════════════════════
 let SUPPLEMENTS = [];
+function isSuppDueOn(supp, dateObj){
+  if(supp.frequency_type === 'daily') return true;
+  return (supp.weekdays || []).includes(dateObj.getDay());
+}
+function computeSuppStreak(supp, takenSet){
+  let streak = 0;
+  const d = new Date();
+  for(let i=0; i<60; i++){
+    const dateStr = d.toISOString().slice(0,10);
+    if(isSuppDueOn(supp, d)){
+      if(takenSet.has(dateStr)) streak++;
+      else break;
+    }
+    d.setDate(d.getDate() - 1);
+  }
+  return streak;
+}
 async function loadSupplements(){
   const { data } = await sb.from('supplements').select('*').eq('user_id', currentUser.id).eq('active', true).order('sort_order');
   SUPPLEMENTS = data || [];
@@ -1173,9 +1324,9 @@ async function renderSupplements(){
   const todayStr = new Date().toISOString().slice(0,10);
   const days7 = [];
   for(let i=6; i>=0; i--){ const d = new Date(); d.setDate(d.getDate()-i); days7.push(d.toISOString().slice(0,10)); }
-  const weekAgoStr = days7[0];
+  const sixtyAgoStr = new Date(Date.now() - 60*86400000).toISOString().slice(0,10);
 
-  const { data: logs } = await sb.from('supplement_logs').select('*').eq('user_id', currentUser.id).gte('log_date', weekAgoStr).lte('log_date', todayStr);
+  const { data: logs } = await sb.from('supplement_logs').select('*').eq('user_id', currentUser.id).gte('log_date', sixtyAgoStr).lte('log_date', todayStr);
   const logMap = {};
   (logs||[]).forEach(l => {
     if(!logMap[l.supplement_id]) logMap[l.supplement_id] = new Set();
@@ -1185,18 +1336,26 @@ async function renderSupplements(){
   box.innerHTML = SUPPLEMENTS.map(s => {
     const takenSet = logMap[s.id] || new Set();
     const takenToday = takenSet.has(todayStr);
-    const dots = days7.map(d => {
-      const taken = takenSet.has(d);
-      const isToday = d === todayStr;
-      return `<div style="flex:1;height:18px;border-radius:5px;background:${taken?'var(--green)':'var(--surface)'};border:1px solid ${isToday?'var(--accent)':'var(--border)'};"></div>`;
+    const dueToday = isSuppDueOn(s, new Date());
+    const streak = computeSuppStreak(s, takenSet);
+    const dots = days7.map(dStr => {
+      const dObj = new Date(dStr + 'T00:00:00');
+      const due = isSuppDueOn(s, dObj);
+      const taken = takenSet.has(dStr);
+      const isToday = dStr === todayStr;
+      let bg = 'var(--surface)';
+      if(!due) bg = 'transparent';
+      else if(taken) bg = 'var(--green)';
+      return `<div style="flex:1;height:18px;border-radius:5px;background:${bg};border:1px ${due?'solid':'dashed'} ${isToday?'var(--accent)':'var(--border)'};"></div>`;
     }).join('');
+    const freqLabel = s.frequency_type === 'daily' ? 'Todos los días' : ('Solo ' + weekdaysLabel(s.weekdays).replace(' · ',''));
     return `
-      <div class="day-card" style="padding:12px 14px;">
+      <div class="day-card" style="padding:12px 14px;opacity:${dueToday?'1':'.55'};">
         <div style="display:flex;align-items:center;gap:10px;">
-          <button class="icon-btn" style="width:38px;height:38px;font-size:1.05rem;background:${takenToday?'var(--green)':'var(--surface)'};color:${takenToday?'#000':'var(--muted)'};border-color:${takenToday?'var(--green)':'var(--border)'};" onclick="toggleSupplementToday('${s.id}')">${takenToday?'✓':'💊'}</button>
+          <button class="icon-btn" style="width:38px;height:38px;font-size:1.05rem;background:${takenToday?'var(--green)':'var(--surface)'};color:${takenToday?'#000':'var(--muted)'};border-color:${takenToday?'var(--green)':'var(--border)'};" onclick="toggleSupplementToday('${s.id}')" ${dueToday?'':'title="No corresponde hoy, pero puedes marcarlo igual"'}>${takenToday?'✓':'💊'}</button>
           <div style="flex:1;">
-            <div style="font-weight:700;font-size:.86rem;">${s.name}</div>
-            <div style="font-size:.68rem;color:var(--muted);">${s.dose || 'Toca el ícono para marcar hoy'}</div>
+            <div style="font-weight:700;font-size:.86rem;">${s.name} ${streak>0?`<span style="color:var(--yellow);font-size:.72rem;">🔥${streak}</span>`:''}</div>
+            <div style="font-size:.68rem;color:var(--muted);">${s.dose ? s.dose + ' · ' : ''}${freqLabel}</div>
           </div>
           <button class="icon-btn" onclick="deleteSupplement('${s.id}')">🗑</button>
         </div>
@@ -1214,18 +1373,41 @@ async function toggleSupplementToday(suppId){
   }
   await renderSupplements();
 }
+let pickedSuppFreq = 'daily', pickedSuppWeekdays = new Set();
 function openAddSupplement(){
   document.getElementById('suppName').value = '';
   document.getElementById('suppDose').value = '';
+  pickedSuppWeekdays = new Set();
+  pickSuppFreq('daily');
   document.getElementById('suppOverlay').classList.add('show');
 }
 function closeSuppSheet(){ document.getElementById('suppOverlay').classList.remove('show'); }
+function pickSuppFreq(freq){
+  pickedSuppFreq = freq;
+  document.querySelectorAll('#suppFreqPick button').forEach(b => b.classList.toggle('active', b.dataset.freq === freq));
+  const wdBox = document.getElementById('suppWeekdayPick');
+  wdBox.classList.toggle('hidden', freq !== 'weekdays');
+  if(freq === 'weekdays') renderSuppWeekdayPicker();
+}
+function renderSuppWeekdayPicker(){
+  document.getElementById('suppWeekdayPick').innerHTML = WEEKDAY_DEFS.map(w => `
+    <button data-wd="${w.val}" onclick="toggleSuppWeekday(${w.val})" class="${pickedSuppWeekdays.has(w.val)?'active':''}" style="min-width:0;flex:1;">${w.label}</button>
+  `).join('');
+}
+function toggleSuppWeekday(val){
+  if(pickedSuppWeekdays.has(val)) pickedSuppWeekdays.delete(val); else pickedSuppWeekdays.add(val);
+  renderSuppWeekdayPicker();
+}
 async function saveSupplement(){
   const name = document.getElementById('suppName').value.trim();
   if(!name) return;
   const dose = document.getElementById('suppDose').value.trim();
   const sort_order = SUPPLEMENTS.length ? Math.max(...SUPPLEMENTS.map(s=>s.sort_order))+1 : 0;
-  await sb.from('supplements').insert({ user_id: currentUser.id, name, dose: dose || null, sort_order });
+  await sb.from('supplements').insert({
+    user_id: currentUser.id, name, dose: dose || null, sort_order,
+    frequency_type: pickedSuppFreq,
+    weekdays: pickedSuppFreq === 'weekdays' ? Array.from(pickedSuppWeekdays) : []
+  });
   closeSuppSheet();
   await loadSupplements();
   showToast('✅ Suplemento agregado');
@@ -1234,6 +1416,75 @@ async function deleteSupplement(id){
   if(!confirm('¿Eliminar este suplemento?')) return;
   await sb.from('supplements').update({ active:false }).eq('id', id);
   await loadSupplements();
+}
+
+// ═══════════════════════════════════════════
+// INICIO (resumen general)
+// ═══════════════════════════════════════════
+async function renderInicio(){
+  const name = (currentUser.email || '').split('@')[0];
+  document.getElementById('inicioGreeting').textContent = `Hola, ${name}`;
+
+  const today = new Date();
+  const todayStr = today.toISOString().slice(0,10);
+  const monday = new Date(today);
+  monday.setDate(today.getDate() - ((today.getDay() + 6) % 7));
+  const weekDates = [];
+  for(let i=0; i<7; i++){ const d = new Date(monday); d.setDate(monday.getDate()+i); weekDates.push(d); }
+  const weekStartStr = weekDates[0].toISOString().slice(0,10);
+  const weekEndStr = weekDates[6].toISOString().slice(0,10);
+
+  const monthStart = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().slice(0,10);
+  const monthEnd = new Date(today.getFullYear(), today.getMonth()+1, 0).toISOString().slice(0,10);
+
+  const { data: monthSessions } = await sb.from('sessions').select('*').eq('user_id', currentUser.id).gte('session_date', monthStart).lte('session_date', monthEnd);
+  const weekSessions = (monthSessions||[]).filter(s => s.session_date >= weekStartStr && s.session_date <= weekEndStr);
+
+  // cuántos días distintos de la semana tienen algo planificado
+  const plannedThisWeek = new Set();
+  weekDates.forEach(d => {
+    DAYS.forEach(day => { if((day.weekdays||[]).includes(d.getDay())) plannedThisWeek.add(d.toISOString().slice(0,10)); });
+  });
+  const doneThisWeekDates = new Set(weekSessions.map(s => s.session_date));
+  document.getElementById('inicioWeekStat').textContent = `${doneThisWeekDates.size}/${Math.max(plannedThisWeek.size, doneThisWeekDates.size)}`;
+  document.getElementById('inicioMonthStat').textContent = new Set((monthSessions||[]).map(s=>s.session_date)).size;
+
+  // tira semanal L-D
+  const sessByDate = {};
+  weekSessions.forEach(s => { if(!sessByDate[s.session_date]) sessByDate[s.session_date]=[]; sessByDate[s.session_date].push(s); });
+  const labels = ['L','M','M','J','V','S','D'];
+  document.getElementById('inicioWeekStrip').innerHTML = weekDates.map((d,i) => {
+    const dateStr = d.toISOString().slice(0,10);
+    calSessionsCache[dateStr] = sessByDate[dateStr] || calSessionsCache[dateStr] || [];
+    const st = getDateStatus(dateStr, d.getDay(), todayStr);
+    const isToday = dateStr === todayStr;
+    let style = 'background:var(--card);color:var(--muted);border:1px solid var(--border);';
+    if(st.status === 'done') style = `background:${st.color};color:#000;border:1px solid ${st.color};font-weight:700;`;
+    else if(st.status === 'pending') style = `background:var(--card);color:${st.color};border:2px dashed ${st.color};font-weight:700;`;
+    else if(st.status === 'missed') style = `background:rgba(239,68,68,.12);color:var(--danger);border:1px solid var(--danger);font-weight:700;`;
+    if(isToday) style += 'box-shadow:0 0 0 2px var(--text) inset;';
+    return `<div style="text-align:center;">
+      <div style="font-size:.6rem;color:var(--muted);margin-bottom:3px;">${labels[i]}</div>
+      <div style="aspect-ratio:1;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:.78rem;${style}">${d.getDate()}</div>
+    </div>`;
+  }).join('');
+
+  // día(s) de hoy
+  const todayPlanned = DAYS.filter(d => (d.weekdays||[]).includes(today.getDay()));
+  const todayBox = document.getElementById('inicioTodayBox');
+  if(!todayPlanned.length){
+    todayBox.innerHTML = `<div class="empty-state" style="padding:20px;">Nada planificado para hoy.</div>`;
+  } else {
+    todayBox.innerHTML = `<div style="font-size:.68rem;color:var(--muted);letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;">Hoy toca</div>` +
+      todayPlanned.map(d => `
+        <div class="day-card" style="padding:12px 14px;cursor:pointer;" onclick="switchTab('rutina');setTimeout(()=>{document.getElementById('daybody-${d.id}').classList.add('open');document.getElementById('daybody-${d.id}').scrollIntoView({behavior:'smooth'});},100);">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <span style="font-size:1.3rem;">${DAY_TYPE_ICON[d.day_type]||'✨'}</span>
+            <div style="flex:1;font-weight:700;font-size:.88rem;">${d.name}</div>
+            ${d.doneToday ? '<span style="color:var(--green);font-size:.78rem;">✅ Hecho</span>' : '<span style="color:var(--muted);font-size:.78rem;">Pendiente ›</span>'}
+          </div>
+        </div>`).join('');
+  }
 }
 </script>
 </body>
