@@ -112,6 +112,8 @@
   /* TIMER */
   #timerOverlay{display:none;position:fixed;inset:0;z-index:999;background:var(--bg);flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center;}
   #timerOverlay.show{display:flex;}
+  #sessionModeOverlay{display:none;position:fixed;inset:0;z-index:997;background:var(--bg);overflow-y:auto;padding:16px;padding-bottom:110px;}
+  #sessionModeOverlay.show{display:block;}
   #timerExName{font-size:1.1rem;font-weight:700;margin-bottom:4px;}
   .timer-badge{display:inline-block;padding:4px 12px;border-radius:20px;font-size:.7rem;font-weight:700;margin-bottom:18px;}
   .timer-badge.work{background:rgba(61,220,151,.15);color:var(--green);}
@@ -374,6 +376,16 @@
   <div class="cues-box-timer" id="timerCuesBox"></div>
 </div>
 
+<!-- SESSION MODE (checklist en vivo, separado del armado) -->
+<div id="sessionModeOverlay">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+    <h3 id="sessionModeTitle" style="font-size:1.15rem;"></h3>
+    <button class="icon-btn" onclick="closeSessionMode()">✕</button>
+  </div>
+  <div id="sessionModeList"></div>
+  <button class="mark-done-btn" id="sessionModeFinishBtn" style="margin-top:16px;position:fixed;bottom:16px;left:16px;right:16px;max-width:448px;margin-left:auto;margin-right:auto;" onclick="finishSessionMode()">✅ Finalizar sesión</button>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -593,6 +605,7 @@ function renderDays(){
       <div class="day-body" id="daybody-${d.id}">
         <div id="exlist-${d.id}"></div>
         <button class="add-btn" onclick="openAddEx('${d.id}')">＋ Agregar ejercicio</button>
+        <button class="mark-done-btn" style="background:var(--accent3);color:#000;margin-top:8px;" onclick="openSessionMode('${d.id}')">▶ Iniciar sesión (ir marcando)</button>
         <button class="mark-done-btn ${d.doneToday?'done':''}" onclick="toggleSessionDone('${d.id}')">
           ${d.doneToday ? '✅ Marcado como hecho hoy — toca para deshacer' : '✅ Marcar como hecho hoy'}
         </button>
@@ -660,7 +673,14 @@ async function saveDaySheet(){
 }
 // ── RUTINA SUGERIDA (plantilla precargada, fútbol + fuerza unilateral) ──
 const SUGGESTED_ROUTINE = [
-  { name:'Día A — Tren inferior unilateral', day_type:'gym', weekdays:[2], exercises:[
+  { name:'Día A — Tren inferior unilateral', day_type:'gym', weekdays:[2],
+    warmups:[
+      {name:'Rotación de tobillos', reps:'10/lado'},
+      {name:'Círculos de cadera', reps:'10/lado'},
+      {name:'Zancada con giro de tronco', reps:'8/lado'},
+      {name:'Puente de glúteo — activación', reps:'12'},
+    ],
+    exercises:[
     {name:'Sentadilla búlgara', series:4, reps:'8/pierna', rest_sec:90},
     {name:'Peso muerto rumano a una pierna', series:4, reps:'8/pierna', rest_sec:90},
     {name:'Zancada lateral', series:3, reps:'10/pierna', rest_sec:60},
@@ -668,21 +688,41 @@ const SUGGESTED_ROUTINE = [
     {name:'Nordic curl (isquios)', series:3, reps:'6-8', rest_sec:90},
     {name:'Pallof press (core anti-rotación)', series:3, reps:'10/lado', rest_sec:45},
   ]},
-  { name:'Día B — Tren superior + core', day_type:'gym', weekdays:[4], exercises:[
+  { name:'Día B — Tren superior + core', day_type:'gym', weekdays:[4],
+    warmups:[
+      {name:'Círculos de brazos', reps:'10/lado'},
+      {name:'Dislocaciones de hombro con banda/palo', reps:'10'},
+      {name:'Remo con banda — activación', reps:'12'},
+      {name:'Plancha corta — activación', reps:'15 seg'},
+    ],
+    exercises:[
     {name:'Press banca o militar', series:4, reps:'8', rest_sec:90},
     {name:'Remo a una mano', series:3, reps:'10/lado', rest_sec:60},
     {name:'Dominadas o jalón', series:3, reps:'8', rest_sec:90},
     {name:'Face pull', series:3, reps:'12', rest_sec:45},
     {name:'Plancha + variantes', series:3, reps:'30-45 seg', rest_sec:45},
   ]},
-  { name:'Día C — Potencia y agilidad', day_type:'gym', weekdays:[6], exercises:[
+  { name:'Día C — Potencia y agilidad', day_type:'gym', weekdays:[6],
+    warmups:[
+      {name:'Elevación de rodillas caminando', reps:'10/lado'},
+      {name:'Talón a glúteo caminando', reps:'10/lado'},
+      {name:'Skipping bajo', reps:'20 seg'},
+      {name:'Saltos verticales suaves', reps:'8'},
+      {name:'Carioca lateral', reps:'15 m/lado'},
+    ],
+    exercises:[
     {name:'Saltos a una pierna', series:4, reps:'5/pierna', rest_sec:90},
     {name:'Sentadilla a una pierna con salto suave', series:3, reps:'6/pierna', rest_sec:90},
     {name:'Sprint corto con cambio de dirección', series:6, reps:'15-20 m', rest_sec:60},
     {name:'Escalera de agilidad', series:3, reps:'20 seg', rest_sec:45},
     {name:'Russian twist con peso', series:3, reps:'15', rest_sec:45},
   ]},
-  { name:'Día D — Prevención (ingle / isquios)', day_type:'gym', weekdays:[], exercises:[
+  { name:'Día D — Prevención (ingle / isquios)', day_type:'gym', weekdays:[],
+    warmups:[
+      {name:'Movilidad de cadera 90/90', reps:'8/lado'},
+      {name:'Apertura y cierre de cadera (worlds greatest stretch)', reps:'6/lado'},
+    ],
+    exercises:[
     {name:'Copenhagen plank', series:3, reps:'20-30 seg/lado', rest_sec:45},
     {name:'Nordic curl progresivo', series:3, reps:'6-8', rest_sec:60},
     {name:'Movilidad de cadera 90/90', series:2, reps:'8/lado', rest_sec:30},
@@ -695,6 +735,9 @@ async function loadSuggestedRoutine(){
     const { data: newDay, error } = await sb.from('days').insert({ user_id: currentUser.id, name: dayDef.name, day_type: dayDef.day_type, weekdays: dayDef.weekdays, sort_order }).select().single();
     if(error || !newDay) continue;
     let i = 0;
+    for(const w of (dayDef.warmups || [])){
+      await sb.from('exercises').insert({ day_id: newDay.id, user_id: currentUser.id, name: w.name, series:1, reps: w.reps, rest_sec:0, category:'warmup', tempo:'Controlado', cues: [], sort_order: i++ });
+    }
     for(const ex of dayDef.exercises){
       await sb.from('exercises').insert({ day_id: newDay.id, user_id: currentUser.id, name: ex.name, series: ex.series, reps: ex.reps, rest_sec: ex.rest_sec, category:'strength', tempo:'Controlado', cues: [], sort_order: i++ });
     }
@@ -712,19 +755,31 @@ async function deleteDay(id){
 // ── EXERCISES ──
 const CATEGORY_LABEL = { warmup:'🔥 Calentamiento / movilidad', strength:'💪 Ejercicios', stretch:'🧘 Estiramiento' };
 const CATEGORY_ORDER = ['warmup','strength','stretch'];
-function renderExerciseCard(ex, dayId){
+function renderExerciseCard(ex, dayId, isFirst, isLast){
   return `
     <div class="ex-card" id="excard-${ex.id}">
-      <div class="ex-head" onclick="toggleExDetail('${ex.id}')">
-        ${ex.img ? `<img class="ex-thumb" src="${ex.img}" onerror="this.style.display='none'">` : ''}
-        <div style="flex:1;">
-          <div class="ex-name">${ex.name}</div>
-          <div class="ex-meta">${ex.series} series × ${ex.reps} · ${ex.rest_sec}s descanso</div>
+      <div class="ex-head">
+        <div style="display:flex;align-items:center;gap:10px;flex:1;cursor:pointer;" onclick="toggleExDetail('${ex.id}')">
+          ${ex.img ? `<img class="ex-thumb" src="${ex.img}" onerror="this.style.display='none'">` : ''}
+          <div style="flex:1;">
+            <div class="ex-name">${ex.name}</div>
+            <div class="ex-meta">${ex.series} series × ${ex.reps} · ${ex.rest_sec}s descanso</div>
+          </div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:3px;">
+          <button class="icon-btn" style="width:26px;height:22px;font-size:.62rem;opacity:${isFirst?'.3':'1'};" ${isFirst?'disabled':''} onclick="moveExercise('${ex.id}','${dayId}',-1)">▲</button>
+          <button class="icon-btn" style="width:26px;height:22px;font-size:.62rem;opacity:${isLast?'.3':'1'};" ${isLast?'disabled':''} onclick="moveExercise('${ex.id}','${dayId}',1)">▼</button>
         </div>
       </div>
       <div class="ex-detail" id="exdetail-${ex.id}">
         ${ex.gif ? `<img class="ex-gif" src="${ex.gif}" loading="lazy" onerror="this.style.display='none'">` : ''}
         ${(ex.cues&&ex.cues.length) ? `<div class="cues-box"><ul>${ex.cues.map(c=>`<li>${c}</li>`).join('')}</ul></div>` : ''}
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+          <span style="font-size:.72rem;color:var(--muted);">Series</span>
+          <button class="adj-btn" onclick="adjustExerciseSeries('${ex.id}',-1)">−</button>
+          <span id="ex-series-val-${ex.id}" style="font-family:'Bebas Neue',sans-serif;font-size:1.15rem;min-width:20px;text-align:center;">${ex.series}</span>
+          <button class="adj-btn" onclick="adjustExerciseSeries('${ex.id}',1)">+</button>
+        </div>
         <div class="set-hint">Serie · Peso (kg) · Reps</div>
         <div id="sets-${ex.id}"></div>
         <textarea id="notes-${ex.id}" placeholder="Notas — variación, mejora, qué agarre usar, etc."
@@ -750,7 +805,7 @@ function renderExercisesForDay(dayId){
     const group = d.exercises.filter(ex => (ex.category || 'strength') === cat);
     if(!group.length) return;
     html += `<div style="font-size:.68rem;color:var(--muted);letter-spacing:1px;text-transform:uppercase;margin:10px 0 6px;">${CATEGORY_LABEL[cat]}</div>`;
-    html += group.map(ex => renderExerciseCard(ex, dayId)).join('');
+    html += group.map((ex,i) => renderExerciseCard(ex, dayId, i===0, i===group.length-1)).join('');
   });
   box.innerHTML = html;
   d.exercises.forEach(ex => renderSetRows(ex.id));
@@ -872,6 +927,36 @@ async function saveExerciseNotes(exId){
   const ex = findExercise(exId);
   if(ex) ex.notes = val;
   showToast('📝 Nota guardada');
+}
+async function adjustExerciseSeries(exId, delta){
+  const ex = findExercise(exId);
+  if(!ex) return;
+  const newSeries = Math.max(1, Math.min(12, ex.series + delta));
+  if(newSeries === ex.series) return;
+  await sb.from('exercises').update({ series: newSeries }).eq('id', exId);
+  ex.series = newSeries;
+  const metaEl = document.querySelector(`#excard-${exId} .ex-meta`);
+  if(metaEl) metaEl.textContent = `${ex.series} series × ${ex.reps} · ${ex.rest_sec}s descanso`;
+  const valEl = document.getElementById('ex-series-val-' + exId);
+  if(valEl) valEl.textContent = ex.series;
+  renderSetRows(exId);
+}
+async function moveExercise(exId, dayId, direction){
+  const d = DAYS.find(x => x.id === dayId);
+  if(!d) return;
+  const ex = d.exercises.find(x => x.id === exId);
+  if(!ex) return;
+  const cat = ex.category || 'strength';
+  const group = d.exercises.filter(x => (x.category || 'strength') === cat);
+  const idx = group.findIndex(x => x.id === exId);
+  const swapIdx = idx + direction;
+  if(swapIdx < 0 || swapIdx >= group.length) return;
+  const other = group[swapIdx];
+  const a = ex.sort_order, b = other.sort_order;
+  await sb.from('exercises').update({ sort_order: b }).eq('id', ex.id);
+  await sb.from('exercises').update({ sort_order: a }).eq('id', other.id);
+  await loadDays();
+  document.getElementById('daybody-' + dayId).classList.add('open');
 }
 
 // ═══════════════════════════════════════════
@@ -1128,6 +1213,100 @@ function resetTimerCues(){
 }
 
 // ═══════════════════════════════════════════
+// MODO SESIÓN (checklist en vivo, separado de armar la rutina)
+// ═══════════════════════════════════════════
+let sessionModeDayId = null;
+function openSessionMode(dayId){
+  sessionModeDayId = dayId;
+  const d = DAYS.find(x => x.id === dayId);
+  if(!d) return;
+  document.getElementById('sessionModeTitle').textContent = `${DAY_TYPE_ICON[d.day_type]||''} ${d.name}`;
+  const box = document.getElementById('sessionModeList');
+  if(!d.exercises.length){
+    box.innerHTML = `<div class="empty-state">Este día no tiene ejercicios todavía — agrégalos primero en la pestaña Rutina.</div>`;
+  } else {
+    let html = '';
+    CATEGORY_ORDER.forEach(cat => {
+      const group = d.exercises.filter(ex => (ex.category || 'strength') === cat);
+      if(!group.length) return;
+      html += `<div style="font-size:.68rem;color:var(--muted);letter-spacing:1px;text-transform:uppercase;margin:10px 0 6px;">${CATEGORY_LABEL[cat]}</div>`;
+      html += group.map(ex => renderExerciseCardSession(ex)).join('');
+    });
+    box.innerHTML = html;
+    d.exercises.forEach(ex => renderSetRowsSession(ex.id));
+  }
+  document.getElementById('sessionModeFinishBtn').textContent = d.doneToday ? '✅ Ya marcada como hecha hoy' : '✅ Finalizar sesión';
+  document.getElementById('sessionModeOverlay').classList.add('show');
+}
+function closeSessionMode(){
+  document.getElementById('sessionModeOverlay').classList.remove('show');
+}
+function renderExerciseCardSession(ex){
+  return `
+    <div class="ex-card" id="sm-excard-${ex.id}">
+      <div class="ex-head" onclick="toggleExDetailSession('${ex.id}')" style="cursor:pointer;">
+        ${ex.img ? `<img class="ex-thumb" src="${ex.img}" onerror="this.style.display='none'">` : ''}
+        <div style="flex:1;">
+          <div class="ex-name">${ex.name}</div>
+          <div class="ex-meta">${ex.series} series × ${ex.reps} · ${ex.rest_sec}s descanso</div>
+        </div>
+      </div>
+      <div class="ex-detail" id="sm-exdetail-${ex.id}">
+        ${ex.gif ? `<img class="ex-gif" src="${ex.gif}" loading="lazy" onerror="this.style.display='none'">` : ''}
+        ${(ex.cues&&ex.cues.length) ? `<div class="cues-box"><ul>${ex.cues.map(c=>`<li>${c}</li>`).join('')}</ul></div>` : ''}
+        ${ex.notes ? `<div class="cues-box" style="border-color:var(--accent3);"><b>📝 Tu nota:</b> ${ex.notes}</div>` : ''}
+        <div class="set-hint">Serie · Peso (kg) · Reps</div>
+        <div id="sm-sets-${ex.id}"></div>
+        <button class="ex-btn-sm timer" style="width:100%;margin-top:8px;" onclick="launchTimer('${ex.id}')">⏱ Cronómetro</button>
+      </div>
+    </div>`;
+}
+function toggleExDetailSession(exId){
+  document.getElementById('sm-exdetail-' + exId).classList.toggle('open');
+}
+function renderSetRowsSession(exId){
+  const ex = findExercise(exId);
+  const box = document.getElementById('sm-sets-' + exId);
+  if(!box) return;
+  let html = '';
+  for(let i=1; i<=ex.series; i++){
+    html += `
+      <div class="set-row">
+        <div class="set-num">${i}</div>
+        <input type="number" inputmode="decimal" placeholder="kg" id="sm-w-${exId}-${i}">
+        <input type="number" inputmode="numeric" placeholder="${ex.reps}" id="sm-r-${exId}-${i}">
+        <button class="set-save" id="sm-save-${exId}-${i}" onclick="saveSetSession('${exId}',${i})">✓</button>
+      </div>`;
+  }
+  box.innerHTML = html;
+}
+async function saveSetSession(exId, serieNum){
+  const w = document.getElementById(`sm-w-${exId}-${serieNum}`).value;
+  const r = document.getElementById(`sm-r-${exId}-${serieNum}`).value;
+  if(!w && !r) return;
+  await sb.from('set_logs').insert({
+    user_id: currentUser.id,
+    exercise_id: exId,
+    serie_number: serieNum,
+    weight: w ? parseFloat(w) : null,
+    reps: r ? parseInt(r) : null
+  });
+  document.getElementById(`sm-save-${exId}-${serieNum}`).classList.add('saved');
+  showToast('✅ Serie guardada');
+}
+async function finishSessionMode(){
+  const d = DAYS.find(x => x.id === sessionModeDayId);
+  if(!d) return;
+  if(d.doneToday){ closeSessionMode(); return; }
+  const todayStr = new Date().toISOString().slice(0,10);
+  const { error } = await sb.from('sessions').insert({ user_id: currentUser.id, day_id: d.id, session_date: todayStr, day_type: d.day_type, completed: true });
+  if(error){ showToast('⚠️ ' + error.message); return; }
+  showToast('🔥 ¡Sesión completada!');
+  closeSessionMode();
+  await loadDays();
+}
+
+// ═══════════════════════════════════════════
 // TOAST
 // ═══════════════════════════════════════════
 function showToast(msg){
@@ -1212,9 +1391,12 @@ function showCalDay(dateStr){
     const d = DAYS.find(x => x.id === s.day_id);
     const label = d ? d.name : (s.notes ? s.notes.split(' — ')[0] : 'Sesión suelta');
     const extraNotes = d ? s.notes : (s.notes && s.notes.includes(' — ') ? s.notes.split(' — ').slice(1).join(' — ') : '');
-    html += `<div style="background:var(--card);border:1px solid var(--green);border-radius:10px;padding:10px 12px;margin-bottom:6px;">
-      <div style="font-weight:700;font-size:.85rem;color:var(--green);">✅ ${DAY_TYPE_ICON[s.day_type]||'✨'} ${label}</div>
-      ${extraNotes ? `<div style="font-size:.72rem;color:var(--muted);margin-top:3px;">${extraNotes}</div>` : ''}
+    html += `<div style="background:var(--card);border:1px solid var(--green);border-radius:10px;padding:10px 12px;margin-bottom:6px;display:flex;align-items:center;gap:10px;">
+      <div style="flex:1;">
+        <div style="font-weight:700;font-size:.85rem;color:var(--green);">✅ ${DAY_TYPE_ICON[s.day_type]||'✨'} ${label}</div>
+        ${extraNotes ? `<div style="font-size:.72rem;color:var(--muted);margin-top:3px;">${extraNotes}</div>` : ''}
+      </div>
+      <button class="icon-btn" style="flex:none;" onclick="deleteSession('${s.id}','${dateStr}')">🗑</button>
     </div>`;
   });
   plannedPending.forEach(d => {
@@ -1232,6 +1414,14 @@ async function markPlannedDone(dayId, dateStr){
   const { error } = await sb.from('sessions').insert({ user_id: currentUser.id, day_id: dayId, session_date: dateStr, day_type: d.day_type, completed: true });
   if(error){ showToast('⚠️ ' + error.message); return; }
   showToast('✅ Sesión registrada');
+  await renderCalendar();
+  showCalDay(dateStr);
+  await loadDays();
+}
+async function deleteSession(sessionId, dateStr){
+  if(!confirm('¿Eliminar esta sesión del calendario?')) return;
+  await sb.from('sessions').delete().eq('id', sessionId);
+  showToast('🗑 Eliminado');
   await renderCalendar();
   showCalDay(dateStr);
   await loadDays();
@@ -1346,7 +1536,7 @@ async function renderSupplements(){
       let bg = 'var(--surface)';
       if(!due) bg = 'transparent';
       else if(taken) bg = 'var(--green)';
-      return `<div style="flex:1;height:18px;border-radius:5px;background:${bg};border:1px ${due?'solid':'dashed'} ${isToday?'var(--accent)':'var(--border)'};"></div>`;
+      return `<div onclick="toggleSupplementDate('${s.id}','${dStr}')" style="flex:1;height:18px;border-radius:5px;background:${bg};border:1px ${due?'solid':'dashed'} ${isToday?'var(--accent)':'var(--border)'};cursor:pointer;"></div>`;
     }).join('');
     const freqLabel = s.frequency_type === 'daily' ? 'Todos los días' : ('Solo ' + weekdaysLabel(s.weekdays).replace(' · ',''));
     return `
@@ -1364,12 +1554,14 @@ async function renderSupplements(){
   }).join('');
 }
 async function toggleSupplementToday(suppId){
-  const todayStr = new Date().toISOString().slice(0,10);
-  const { data: existing } = await sb.from('supplement_logs').select('*').eq('supplement_id', suppId).eq('log_date', todayStr).maybeSingle();
+  await toggleSupplementDate(suppId, new Date().toISOString().slice(0,10));
+}
+async function toggleSupplementDate(suppId, dateStr){
+  const { data: existing } = await sb.from('supplement_logs').select('*').eq('supplement_id', suppId).eq('log_date', dateStr).maybeSingle();
   if(existing){
     await sb.from('supplement_logs').delete().eq('id', existing.id);
   } else {
-    await sb.from('supplement_logs').insert({ user_id: currentUser.id, supplement_id: suppId, log_date: todayStr, taken: true });
+    await sb.from('supplement_logs').insert({ user_id: currentUser.id, supplement_id: suppId, log_date: dateStr, taken: true });
   }
   await renderSupplements();
 }
@@ -1477,7 +1669,7 @@ async function renderInicio(){
   } else {
     todayBox.innerHTML = `<div style="font-size:.68rem;color:var(--muted);letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;">Hoy toca</div>` +
       todayPlanned.map(d => `
-        <div class="day-card" style="padding:12px 14px;cursor:pointer;" onclick="switchTab('rutina');setTimeout(()=>{document.getElementById('daybody-${d.id}').classList.add('open');document.getElementById('daybody-${d.id}').scrollIntoView({behavior:'smooth'});},100);">
+        <div class="day-card" style="padding:12px 14px;cursor:pointer;" onclick="openSessionMode('${d.id}')">
           <div style="display:flex;align-items:center;gap:10px;">
             <span style="font-size:1.3rem;">${DAY_TYPE_ICON[d.day_type]||'✨'}</span>
             <div style="flex:1;font-weight:700;font-size:.88rem;">${d.name}</div>
