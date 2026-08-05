@@ -190,6 +190,7 @@
       </div>
     </div>
     <div id="inicioTodayBox"></div>
+    <div id="inicioHabitsBox" style="margin-top:18px;"></div>
   </div>
 
   <!-- TAB: RUTINA -->
@@ -239,6 +240,16 @@
 
   <!-- TAB: HÁBITOS -->
   <div class="tab-panel" id="panel-suplementos">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+      <button class="icon-btn" onclick="habitsCalShiftMonth(-1)">‹</button>
+      <div id="habitsCalMonthLabel" style="font-weight:700;font-size:.95rem;text-transform:capitalize;"></div>
+      <button class="icon-btn" onclick="habitsCalShiftMonth(1)">›</button>
+    </div>
+    <div id="habitsCalGrid" style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:10px;"></div>
+    <div id="habitsDateLabel" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+      <span style="font-size:.72rem;color:var(--muted);letter-spacing:.5px;"></span>
+      <button class="icon-btn" style="width:auto;padding:0 10px;font-size:.7rem;" onclick="resetHabitDateToToday()">Hoy</button>
+    </div>
     <div id="supplementsList"></div>
     <button class="add-btn" onclick="openAddSupplement()">＋ Agregar hábito</button>
   </div>
@@ -303,6 +314,8 @@
       <button data-type="quantity" onclick="pickSuppType('quantity')">🔢 Cantidad (ej: litros)</button>
     </div>
     <input type="text" id="suppDose" placeholder="Dosis (opcional, ej: 5g)">
+    <div style="font-size:.68rem;color:var(--muted);margin-bottom:4px;">¿Desde cuándo lo haces?</div>
+    <input type="date" id="suppStartedOn" style="margin-bottom:10px;">
     <div class="hidden" id="suppQuantityFields">
       <div style="display:flex;gap:8px;">
         <input type="text" id="suppUnit" placeholder="Unidad (ej: litros, g)" style="flex:1;">
@@ -1609,6 +1622,11 @@ async function saveLogPast(){
 // SUPLEMENTOS
 // ═══════════════════════════════════════════
 let SUPPLEMENTS = [];
+let selectedHabitDate = new Date().toISOString().slice(0,10);
+let habitsCalMonth = new Date();
+habitsCalMonth.setDate(1);
+let habitLogsCache = {}; // dateStr -> { suppId -> logRow } (para el mes visible del calendario de hábitos)
+
 function isSuppDueOn(supp, dateObj){
   if(supp.frequency_type === 'daily') return true;
   return (supp.weekdays || []).includes(dateObj.getDay());
@@ -1635,8 +1653,75 @@ function computeSuppStreak(supp, logByDate){
 async function loadSupplements(){
   const { data } = await sb.from('supplements').select('*').eq('user_id', currentUser.id).eq('active', true).order('sort_order');
   SUPPLEMENTS = data || [];
+  await renderHabitsCalendar();
   await renderSupplements();
 }
+
+// ── Calendario mensual de hábitos (arriba del tab, para elegir qué día editar) ──
+async function renderHabitsCalendar(){
+  const year = habitsCalMonth.getFullYear();
+  const month = habitsCalMonth.getMonth();
+  document.getElementById('habitsCalMonthLabel').textContent = habitsCalMonth.toLocaleDateString('es-CL', { month:'long', year:'numeric' });
+
+  const firstOfMonth = new Date(year, month, 1);
+  const lastOfMonth = new Date(year, month + 1, 0);
+  const startStr = firstOfMonth.toISOString().slice(0,10);
+  const endStr = lastOfMonth.toISOString().slice(0,10);
+
+  const { data: logs } = await sb.from('supplement_logs').select('*').eq('user_id', currentUser.id).gte('log_date', startStr).lte('log_date', endStr);
+  habitLogsCache = {};
+  (logs||[]).forEach(l => {
+    if(!habitLogsCache[l.log_date]) habitLogsCache[l.log_date] = {};
+    habitLogsCache[l.log_date][l.supplement_id] = l;
+  });
+
+  const startWeekday = (firstOfMonth.getDay() + 6) % 7;
+  const daysInMonth = lastOfMonth.getDate();
+  const todayStr = new Date().toISOString().slice(0,10);
+  const headers = ['L','M','M','J','V','S','D'].map(h => `<div style="text-align:center;font-size:.6rem;color:var(--muted);">${h}</div>`).join('');
+  let cells = '';
+  for(let i=0; i<startWeekday; i++) cells += `<div></div>`;
+  for(let d=1; d<=daysInMonth; d++){
+    const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const dObj = new Date(year, month, d);
+    const dueHabits = SUPPLEMENTS.filter(s => isSuppDueOn(s, dObj) && dateStr >= (s.started_on || '2000-01-01'));
+    const dayLogs = habitLogsCache[dateStr] || {};
+    let style = 'background:var(--card);color:var(--muted);border:1px solid var(--border);';
+    if(dueHabits.length){
+      const doneCount = dueHabits.filter(s => suppSuccess(s, dayLogs[s.id])).length;
+      const ratio = doneCount / dueHabits.length;
+      if(ratio === 1) style = `background:var(--green);color:#000;border:1px solid var(--green);font-weight:700;`;
+      else if(ratio > 0) style = `background:var(--card);color:var(--yellow);border:2px dashed var(--yellow);font-weight:700;`;
+      else if(dateStr < todayStr) style = `background:rgba(239,68,68,.12);color:var(--danger);border:1px solid var(--danger);font-weight:700;`;
+      else style = `background:var(--card);color:var(--muted);border:2px dashed var(--border);`;
+    }
+    if(dateStr === selectedHabitDate) style += 'box-shadow:0 0 0 2px var(--text) inset;';
+    cells += `<div onclick="selectHabitDate('${dateStr}')" style="aspect-ratio:1;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:.7rem;cursor:pointer;box-sizing:border-box;${style}">${d}</div>`;
+  }
+  document.getElementById('habitsCalGrid').innerHTML = headers + cells;
+
+  const todayLabel = selectedHabitDate === todayStr ? 'Hoy' : new Date(selectedHabitDate + 'T00:00:00').toLocaleDateString('es-CL', { weekday:'long', day:'numeric', month:'long' });
+  document.querySelector('#habitsDateLabel span').textContent = 'Editando: ' + todayLabel;
+}
+function habitsCalShiftMonth(delta){
+  habitsCalMonth.setMonth(habitsCalMonth.getMonth() + delta);
+  renderHabitsCalendar();
+}
+async function selectHabitDate(dateStr){
+  selectedHabitDate = dateStr;
+  await renderHabitsCalendar();
+  await renderSupplements();
+}
+async function resetHabitDateToToday(){
+  await selectHabitDate(new Date().toISOString().slice(0,10));
+}
+
+function daysSince(dateStr){
+  if(!dateStr) return null;
+  const diff = Math.floor((new Date(new Date().toISOString().slice(0,10)) - new Date(dateStr)) / 86400000);
+  return diff;
+}
+
 async function renderSupplements(){
   const box = document.getElementById('supplementsList');
   if(!SUPPLEMENTS.length){
@@ -1644,10 +1729,7 @@ async function renderSupplements(){
     return;
   }
   const todayStr = new Date().toISOString().slice(0,10);
-  const days7 = [];
-  for(let i=6; i>=0; i--){ const d = new Date(); d.setDate(d.getDate()-i); days7.push(d.toISOString().slice(0,10)); }
   const sixtyAgoStr = new Date(Date.now() - 60*86400000).toISOString().slice(0,10);
-
   const { data: logs } = await sb.from('supplement_logs').select('*').eq('user_id', currentUser.id).gte('log_date', sixtyAgoStr).lte('log_date', todayStr);
   const logMap = {}; // supp_id -> { dateStr -> logRow }
   (logs||[]).forEach(l => {
@@ -1657,33 +1739,23 @@ async function renderSupplements(){
 
   box.innerHTML = SUPPLEMENTS.map(s => {
     const logByDate = logMap[s.id] || {};
-    const dueToday = isSuppDueOn(s, new Date());
+    const dueSelected = isSuppDueOn(s, new Date(selectedHabitDate + 'T00:00:00'));
     const streak = computeSuppStreak(s, logByDate);
     const freqLabel = s.frequency_type === 'daily' ? 'Todos los días' : ('Solo ' + weekdaysLabel(s.weekdays).replace(' · ',''));
-    const dots = days7.map(dStr => {
-      const dObj = new Date(dStr + 'T00:00:00');
-      const due = isSuppDueOn(s, dObj);
-      const ok = suppSuccess(s, logByDate[dStr]);
-      const isToday = dStr === todayStr;
-      let bg = 'var(--surface)';
-      if(!due) bg = 'transparent';
-      else if(ok) bg = 'var(--green)';
-      const clickFn = s.habit_type === 'quantity' ? '' : `onclick="toggleSupplementDate('${s.id}','${dStr}')"`;
-      return `<div ${clickFn} style="flex:1;height:18px;border-radius:5px;background:${bg};border:1px ${due?'solid':'dashed'} ${isToday?'var(--accent)':'var(--border)'};${s.habit_type==='quantity'?'':'cursor:pointer;'}"></div>`;
-    }).join('');
+    const since = s.started_on ? `Desde ${new Date(s.started_on+'T00:00:00').toLocaleDateString('es-CL')} · día ${daysSince(s.started_on)+1}` : '';
 
     if(s.habit_type === 'quantity'){
-      const todayLog = logByDate[todayStr];
-      const amount = todayLog ? (todayLog.amount || 0) : 0;
+      const selLog = logByDate[selectedHabitDate];
+      const amount = selLog ? (selLog.amount || 0) : 0;
       const target = s.target_amount || 1;
       const pct = Math.min(100, Math.round((amount/target)*100));
       const met = amount >= target;
       return `
-        <div class="day-card" style="padding:12px 14px;opacity:${dueToday?'1':'.55'};">
+        <div class="day-card" style="padding:12px 14px;opacity:${dueSelected?'1':'.55'};">
           <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
             <div style="flex:1;">
               <div style="font-weight:700;font-size:.86rem;">${s.name} ${streak>0?`<span style="color:var(--yellow);font-size:.72rem;">🔥${streak}</span>`:''}</div>
-              <div style="font-size:.68rem;color:var(--muted);">${freqLabel}</div>
+              <div style="font-size:.68rem;color:var(--muted);">${freqLabel}${since?' · '+since:''}</div>
             </div>
             <button class="icon-btn" onclick="deleteSupplement('${s.id}')">🗑</button>
           </div>
@@ -1695,28 +1767,23 @@ async function renderSupplements(){
             <div style="flex:1;text-align:center;font-family:'Bebas Neue',sans-serif;font-size:1.3rem;${met?'color:var(--green);':''}">${amount} / ${target} ${s.unit||''}</div>
             <button class="adj-btn" onclick="adjustHabitAmount('${s.id}',${s.step_amount})">+</button>
           </div>
-          <div style="display:flex;gap:4px;margin-top:10px;">${dots}</div>
         </div>`;
     }
 
-    const todayLog = logByDate[todayStr];
-    const takenToday = !!(todayLog && todayLog.taken);
+    const selLog = logByDate[selectedHabitDate];
+    const takenSelected = !!(selLog && selLog.taken);
     return `
-      <div class="day-card" style="padding:12px 14px;opacity:${dueToday?'1':'.55'};">
+      <div class="day-card" style="padding:12px 14px;opacity:${dueSelected?'1':'.55'};">
         <div style="display:flex;align-items:center;gap:10px;">
-          <button class="icon-btn" style="width:38px;height:38px;font-size:1.05rem;background:${takenToday?'var(--green)':'var(--surface)'};color:${takenToday?'#000':'var(--muted)'};border-color:${takenToday?'var(--green)':'var(--border)'};" onclick="toggleSupplementToday('${s.id}')" ${dueToday?'':'title="No corresponde hoy, pero puedes marcarlo igual"'}>${takenToday?'✓':'✅'}</button>
+          <button class="icon-btn" style="width:38px;height:38px;font-size:1.05rem;background:${takenSelected?'var(--green)':'var(--surface)'};color:${takenSelected?'#000':'var(--muted)'};border-color:${takenSelected?'var(--green)':'var(--border)'};" onclick="toggleSupplementDate('${s.id}',selectedHabitDate)" ${dueSelected?'':'title="No corresponde este día, pero puedes marcarlo igual"'}>${takenSelected?'✓':'✅'}</button>
           <div style="flex:1;">
             <div style="font-weight:700;font-size:.86rem;">${s.name} ${streak>0?`<span style="color:var(--yellow);font-size:.72rem;">🔥${streak}</span>`:''}</div>
-            <div style="font-size:.68rem;color:var(--muted);">${s.dose ? s.dose + ' · ' : ''}${freqLabel}</div>
+            <div style="font-size:.68rem;color:var(--muted);">${s.dose ? s.dose + ' · ' : ''}${freqLabel}${since?' · '+since:''}</div>
           </div>
           <button class="icon-btn" onclick="deleteSupplement('${s.id}')">🗑</button>
         </div>
-        <div style="display:flex;gap:4px;margin-top:10px;">${dots}</div>
       </div>`;
   }).join('');
-}
-async function toggleSupplementToday(suppId){
-  await toggleSupplementDate(suppId, new Date().toISOString().slice(0,10));
 }
 async function toggleSupplementDate(suppId, dateStr){
   const { data: existing } = await sb.from('supplement_logs').select('*').eq('supplement_id', suppId).eq('log_date', dateStr).maybeSingle();
@@ -1725,18 +1792,19 @@ async function toggleSupplementDate(suppId, dateStr){
   } else {
     await sb.from('supplement_logs').insert({ user_id: currentUser.id, supplement_id: suppId, log_date: dateStr, taken: true });
   }
+  await renderHabitsCalendar();
   await renderSupplements();
 }
 async function adjustHabitAmount(suppId, delta){
-  const todayStr = new Date().toISOString().slice(0,10);
-  const { data: existing } = await sb.from('supplement_logs').select('*').eq('supplement_id', suppId).eq('log_date', todayStr).maybeSingle();
+  const { data: existing } = await sb.from('supplement_logs').select('*').eq('supplement_id', suppId).eq('log_date', selectedHabitDate).maybeSingle();
   const current = existing ? (existing.amount || 0) : 0;
   const next = Math.max(0, Math.round((current + delta) * 100) / 100);
   if(existing){
     await sb.from('supplement_logs').update({ amount: next, taken: next > 0 }).eq('id', existing.id);
   } else {
-    await sb.from('supplement_logs').insert({ user_id: currentUser.id, supplement_id: suppId, log_date: todayStr, amount: next, taken: next > 0 });
+    await sb.from('supplement_logs').insert({ user_id: currentUser.id, supplement_id: suppId, log_date: selectedHabitDate, amount: next, taken: next > 0 });
   }
+  await renderHabitsCalendar();
   await renderSupplements();
 }
 let pickedSuppFreq = 'daily', pickedSuppWeekdays = new Set(), pickedSuppType = 'check';
@@ -1746,6 +1814,7 @@ function openAddSupplement(){
   document.getElementById('suppUnit').value = '';
   document.getElementById('suppTarget').value = '';
   document.getElementById('suppStep').value = '';
+  document.getElementById('suppStartedOn').value = new Date().toISOString().slice(0,10);
   pickedSuppWeekdays = new Set();
   pickSuppType('check');
   pickSuppFreq('daily');
@@ -1777,12 +1846,14 @@ async function saveSupplement(){
   const name = document.getElementById('suppName').value.trim();
   if(!name) return;
   const dose = document.getElementById('suppDose').value.trim();
+  const startedOn = document.getElementById('suppStartedOn').value || new Date().toISOString().slice(0,10);
   const sort_order = SUPPLEMENTS.length ? Math.max(...SUPPLEMENTS.map(s=>s.sort_order))+1 : 0;
   const payload = {
     user_id: currentUser.id, name, dose: dose || null, sort_order,
     frequency_type: pickedSuppFreq,
     weekdays: pickedSuppFreq === 'weekdays' ? Array.from(pickedSuppWeekdays) : [],
-    habit_type: pickedSuppType
+    habit_type: pickedSuppType,
+    started_on: startedOn
   };
   if(pickedSuppType === 'quantity'){
     payload.unit = document.getElementById('suppUnit').value.trim() || null;
@@ -1866,6 +1937,27 @@ async function renderInicio(){
             ${d.doneToday ? '<span style="color:var(--green);font-size:.78rem;">✅ Hecho</span>' : '<span style="color:var(--muted);font-size:.78rem;">Pendiente ›</span>'}
           </div>
         </div>`).join('');
+  }
+
+  // resumen de rachas de hábitos
+  const habitsBox = document.getElementById('inicioHabitsBox');
+  const { data: habits } = await sb.from('supplements').select('*').eq('user_id', currentUser.id).eq('active', true).order('sort_order');
+  if(!habits || !habits.length){
+    habitsBox.innerHTML = '';
+  } else {
+    const sixtyAgoStr = new Date(Date.now() - 60*86400000).toISOString().slice(0,10);
+    const { data: hLogs } = await sb.from('supplement_logs').select('*').eq('user_id', currentUser.id).gte('log_date', sixtyAgoStr).lte('log_date', todayStr);
+    const hLogMap = {};
+    (hLogs||[]).forEach(l => { if(!hLogMap[l.supplement_id]) hLogMap[l.supplement_id] = {}; hLogMap[l.supplement_id][l.log_date] = l; });
+    const rows = habits.map(s => ({ s, streak: computeSuppStreak(s, hLogMap[s.id] || {}) })).sort((a,b) => b.streak - a.streak);
+    habitsBox.innerHTML = `<div style="font-size:.68rem;color:var(--muted);letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;">🔥 Rachas de hábitos</div>` +
+      `<div class="day-card" style="padding:6px 14px;cursor:pointer;" onclick="switchTab('suplementos')">` +
+      rows.map(({s,streak}, i) => `
+        <div style="display:flex;align-items:center;gap:10px;padding:8px 0;${i<rows.length-1?'border-bottom:1px solid var(--border);':''}">
+          <div style="flex:1;font-size:.84rem;">${s.name}</div>
+          <div style="font-family:'Bebas Neue',sans-serif;font-size:1.1rem;color:${streak>0?'var(--yellow)':'var(--muted)'};">${streak>0?`🔥 ${streak}`:'—'}</div>
+        </div>`).join('') +
+      `</div>`;
   }
 }
 </script>
