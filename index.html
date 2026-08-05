@@ -196,7 +196,8 @@
   <div class="tab-panel" id="panel-rutina">
     <div id="daysList"></div>
     <button class="add-btn" onclick="openAddDay()">＋ Agregar día</button>
-    <button class="add-btn" style="border-style:solid;border-color:var(--yellow);color:var(--yellow);margin-top:8px;" onclick="loadSuggestedRoutine()">⚡ Cargar rutina sugerida (fútbol + unilateral)</button>
+    <button class="add-btn" style="border-style:solid;border-color:var(--yellow);color:var(--yellow);margin-top:8px;" onclick="loadSuggestedRoutine()">⚡ Cargar rutina sugerida — fútbol A/B/C/D</button>
+    <button class="add-btn" style="border-style:solid;border-color:var(--accent3);color:var(--accent3);margin-top:8px;" onclick="loadSuggestedRoutine2()">⚡ Cargar rutina sugerida — empuje/pierna/tirón/potencia</button>
   </div>
 
   <!-- TAB: PROGRESO -->
@@ -236,10 +237,10 @@
     <button class="add-btn" onclick="openLogPast()">＋ Agregar sesión pasada</button>
   </div>
 
-  <!-- TAB: SUPLEMENTOS -->
+  <!-- TAB: HÁBITOS -->
   <div class="tab-panel" id="panel-suplementos">
     <div id="supplementsList"></div>
-    <button class="add-btn" onclick="openAddSupplement()">＋ Agregar suplemento</button>
+    <button class="add-btn" onclick="openAddSupplement()">＋ Agregar hábito</button>
   </div>
 </div>
 
@@ -249,7 +250,7 @@
   <button class="tab-btn" data-tab="rutina" onclick="switchTab('rutina')"><span class="ic">🏋️</span>Rutina</button>
   <button class="tab-btn" data-tab="progreso" onclick="switchTab('progreso')"><span class="ic">📈</span>Progreso</button>
   <button class="tab-btn" data-tab="calendario" onclick="switchTab('calendario')"><span class="ic">📅</span>Calendario</button>
-  <button class="tab-btn" data-tab="suplementos" onclick="switchTab('suplementos')"><span class="ic">💊</span>Suplementos</button>
+  <button class="tab-btn" data-tab="suplementos" onclick="switchTab('suplementos')"><span class="ic">✅</span>Hábitos</button>
 </div>
 
 
@@ -292,12 +293,23 @@
   </div>
 </div>
 
-<!-- ADD SUPPLEMENT SHEET -->
+<!-- ADD HABIT SHEET -->
 <div class="sheet-overlay" id="suppOverlay" onclick="if(event.target===this)closeSuppSheet()">
   <div class="sheet">
-    <div class="sheet-head"><h3>＋ Suplemento</h3><button class="icon-btn" onclick="closeSuppSheet()">✕</button></div>
-    <input type="text" id="suppName" placeholder="Nombre (ej: Creatina)">
+    <div class="sheet-head"><h3>＋ Hábito</h3><button class="icon-btn" onclick="closeSuppSheet()">✕</button></div>
+    <input type="text" id="suppName" placeholder="Nombre (ej: Creatina, Beber agua)">
+    <div class="type-pick" id="suppTypePick">
+      <button data-type="check" onclick="pickSuppType('check')">✅ Simple (hecho/no hecho)</button>
+      <button data-type="quantity" onclick="pickSuppType('quantity')">🔢 Cantidad (ej: litros)</button>
+    </div>
     <input type="text" id="suppDose" placeholder="Dosis (opcional, ej: 5g)">
+    <div class="hidden" id="suppQuantityFields">
+      <div style="display:flex;gap:8px;">
+        <input type="text" id="suppUnit" placeholder="Unidad (ej: litros, g)" style="flex:1;">
+        <input type="number" id="suppTarget" placeholder="Meta diaria (ej: 2)" style="flex:1;">
+      </div>
+      <input type="number" id="suppStep" placeholder="Cuánto suma cada toque (ej: 0.2)" step="0.1">
+    </div>
     <div class="type-pick" id="suppFreqPick">
       <button data-freq="daily" onclick="pickSuppFreq('daily')">📅 Todos los días</button>
       <button data-freq="weekdays" onclick="pickSuppFreq('weekdays')">🗓️ Días específicos</button>
@@ -675,71 +687,185 @@ async function saveDaySheet(){
 const SUGGESTED_ROUTINE = [
   { name:'Día A — Tren inferior unilateral', day_type:'gym', weekdays:[2],
     warmups:[
-      {name:'Rotación de tobillos', reps:'10/lado'},
-      {name:'Círculos de cadera', reps:'10/lado'},
-      {name:'Zancada con giro de tronco', reps:'8/lado'},
-      {name:'Puente de glúteo — activación', reps:'12'},
+      {name:'Rotación de tobillos', reps:'10/lado', search:'ankle circles'},
+      {name:'Círculos de cadera', reps:'10/lado', search:'hip circles'},
+      {name:'Zancada con giro de tronco', reps:'8/lado', search:'lunge twist'},
+      {name:'Puente de glúteo — activación', reps:'12', search:'glute bridge'},
     ],
     exercises:[
-    {name:'Sentadilla búlgara', series:4, reps:'8/pierna', rest_sec:90},
-    {name:'Peso muerto rumano a una pierna', series:4, reps:'8/pierna', rest_sec:90},
-    {name:'Zancada lateral', series:3, reps:'10/pierna', rest_sec:60},
-    {name:'Hip thrust a una pierna', series:3, reps:'12/pierna', rest_sec:60},
-    {name:'Nordic curl (isquios)', series:3, reps:'6-8', rest_sec:90},
-    {name:'Pallof press (core anti-rotación)', series:3, reps:'10/lado', rest_sec:45},
+    {name:'Sentadilla búlgara', series:4, reps:'8/pierna', rest_sec:90, search:'bulgarian split squat'},
+    {name:'Peso muerto rumano a una pierna', series:4, reps:'8/pierna', rest_sec:90, search:'single leg romanian deadlift'},
+    {name:'Zancada lateral', series:3, reps:'10/pierna', rest_sec:60, search:'lateral lunge'},
+    {name:'Hip thrust a una pierna', series:3, reps:'12/pierna', rest_sec:60, search:'single leg hip thrust'},
+    {name:'Nordic curl (isquios)', series:3, reps:'6-8', rest_sec:90, search:'nordic hamstring curl'},
+    {name:'Pallof press (core anti-rotación)', series:3, reps:'10/lado', rest_sec:45, search:'pallof press'},
   ]},
   { name:'Día B — Tren superior + core', day_type:'gym', weekdays:[4],
     warmups:[
-      {name:'Círculos de brazos', reps:'10/lado'},
-      {name:'Dislocaciones de hombro con banda/palo', reps:'10'},
-      {name:'Remo con banda — activación', reps:'12'},
-      {name:'Plancha corta — activación', reps:'15 seg'},
+      {name:'Círculos de brazos', reps:'10/lado', search:'arm circles'},
+      {name:'Dislocaciones de hombro con banda/palo', reps:'10', search:'shoulder dislocate band'},
+      {name:'Remo con banda — activación', reps:'12', search:'band row'},
+      {name:'Plancha corta — activación', reps:'15 seg', search:'plank'},
     ],
     exercises:[
-    {name:'Press banca o militar', series:4, reps:'8', rest_sec:90},
-    {name:'Remo a una mano', series:3, reps:'10/lado', rest_sec:60},
-    {name:'Dominadas o jalón', series:3, reps:'8', rest_sec:90},
-    {name:'Face pull', series:3, reps:'12', rest_sec:45},
-    {name:'Plancha + variantes', series:3, reps:'30-45 seg', rest_sec:45},
+    {name:'Press banca o militar', series:4, reps:'8', rest_sec:90, search:'barbell bench press'},
+    {name:'Remo a una mano', series:3, reps:'10/lado', rest_sec:60, search:'one arm dumbbell row'},
+    {name:'Dominadas o jalón', series:3, reps:'8', rest_sec:90, search:'pull up'},
+    {name:'Face pull', series:3, reps:'12', rest_sec:45, search:'face pull'},
+    {name:'Plancha + variantes', series:3, reps:'30-45 seg', rest_sec:45, search:'plank'},
   ]},
   { name:'Día C — Potencia y agilidad', day_type:'gym', weekdays:[6],
     warmups:[
-      {name:'Elevación de rodillas caminando', reps:'10/lado'},
-      {name:'Talón a glúteo caminando', reps:'10/lado'},
-      {name:'Skipping bajo', reps:'20 seg'},
-      {name:'Saltos verticales suaves', reps:'8'},
-      {name:'Carioca lateral', reps:'15 m/lado'},
+      {name:'Elevación de rodillas caminando', reps:'10/lado', search:'high knees'},
+      {name:'Talón a glúteo caminando', reps:'10/lado', search:'butt kicks'},
+      {name:'Skipping bajo', reps:'20 seg', search:'high knees'},
+      {name:'Saltos verticales suaves', reps:'8', search:'jump squat'},
+      {name:'Carioca lateral', reps:'15 m/lado', search:'lateral shuffle'},
     ],
     exercises:[
-    {name:'Saltos a una pierna', series:4, reps:'5/pierna', rest_sec:90},
-    {name:'Sentadilla a una pierna con salto suave', series:3, reps:'6/pierna', rest_sec:90},
-    {name:'Sprint corto con cambio de dirección', series:6, reps:'15-20 m', rest_sec:60},
-    {name:'Escalera de agilidad', series:3, reps:'20 seg', rest_sec:45},
-    {name:'Russian twist con peso', series:3, reps:'15', rest_sec:45},
+    {name:'Saltos a una pierna', series:4, reps:'5/pierna', rest_sec:90, search:'single leg box jump'},
+    {name:'Sentadilla a una pierna con salto suave', series:3, reps:'6/pierna', rest_sec:90, search:'jump squat'},
+    {name:'Sprint corto con cambio de dirección', series:6, reps:'15-20 m', rest_sec:60, search:null},
+    {name:'Escalera de agilidad', series:3, reps:'20 seg', rest_sec:45, search:null},
+    {name:'Russian twist con peso', series:3, reps:'15', rest_sec:45, search:'russian twist'},
   ]},
   { name:'Día D — Prevención (ingle / isquios)', day_type:'gym', weekdays:[],
     warmups:[
-      {name:'Movilidad de cadera 90/90', reps:'8/lado'},
-      {name:'Apertura y cierre de cadera (worlds greatest stretch)', reps:'6/lado'},
+      {name:'Movilidad de cadera 90/90', reps:'8/lado', search:'hip 90 90 stretch'},
+      {name:'Apertura y cierre de cadera (worlds greatest stretch)', reps:'6/lado', search:'world greatest stretch'},
     ],
     exercises:[
-    {name:'Copenhagen plank', series:3, reps:'20-30 seg/lado', rest_sec:45},
-    {name:'Nordic curl progresivo', series:3, reps:'6-8', rest_sec:60},
-    {name:'Movilidad de cadera 90/90', series:2, reps:'8/lado', rest_sec:30},
+    {name:'Copenhagen plank', series:3, reps:'20-30 seg/lado', rest_sec:45, search:'copenhagen plank'},
+    {name:'Nordic curl progresivo', series:3, reps:'6-8', rest_sec:60, search:'nordic hamstring curl'},
+    {name:'Movilidad de cadera 90/90', series:2, reps:'8/lado', rest_sec:30, search:'hip 90 90 stretch'},
   ]},
 ];
+const SUGGESTED_ROUTINE_2 = [
+  { name:'Día 1 — Empuje unilateral + core', day_type:'gym', weekdays:[1],
+    warmups:[
+      {name:'Rotación de hombros', reps:'10/lado', search:'shoulder circles'},
+      {name:'Círculos de brazos', reps:'10/lado', search:'arm circles'},
+      {name:'Apertura de pecho con banda', reps:'10', search:'band chest opener'},
+      {name:'Plancha corta — activación', reps:'15 seg', search:'plank'},
+    ],
+    exercises:[
+      {name:'Press de hombro con mancuernas alternado', series:4, reps:'8/lado', rest_sec:75, search:'alternating dumbbell shoulder press'},
+      {name:'Press de pecho a un brazo (mancuerna)', series:3, reps:'10/lado', rest_sec:60, search:'single arm dumbbell bench press'},
+      {name:'Fondos o press en máquina múltiple', series:3, reps:'10', rest_sec:60, search:'chest dip'},
+      {name:'Elevaciones laterales', series:3, reps:'12', rest_sec:45, search:'dumbbell lateral raise'},
+      {name:'Plancha con toque de hombro', series:3, reps:'12/lado', rest_sec:45, search:'plank shoulder tap'},
+    ]},
+  { name:'Día 2 — Tren inferior unilateral', day_type:'gym', weekdays:[3],
+    warmups:[
+      {name:'Rotación de tobillos', reps:'10/lado', search:'ankle circles'},
+      {name:'Círculos de cadera', reps:'10/lado', search:'hip circles'},
+      {name:'Zancada con giro de tronco', reps:'8/lado', search:'lunge twist'},
+      {name:'Puente de glúteo — activación', reps:'12', search:'glute bridge'},
+    ],
+    exercises:[
+      {name:'Sentadilla búlgara con mancuernas', series:4, reps:'8/pierna', rest_sec:90, search:'bulgarian split squat'},
+      {name:'Peso muerto rumano a una pierna con mancuerna', series:4, reps:'8/pierna', rest_sec:90, search:'single leg romanian deadlift'},
+      {name:'Zancada caminando con mancuernas', series:3, reps:'10/pierna', rest_sec:60, search:'walking lunge'},
+      {name:'Puente de glúteo a una pierna', series:3, reps:'12/pierna', rest_sec:45, search:'single leg glute bridge'},
+      {name:'Elevación de gemelo a una pierna', series:3, reps:'15/pierna', rest_sec:45, search:'single leg calf raise'},
+    ]},
+  { name:'Día 3 — Tirón unilateral + core rotacional', day_type:'gym', weekdays:[5],
+    warmups:[
+      {name:'Círculos de brazos', reps:'10/lado', search:'arm circles'},
+      {name:'Remo con banda — activación', reps:'12', search:'band row'},
+      {name:'Rotación de tronco', reps:'10/lado', search:'trunk rotation'},
+      {name:'Dead bug — activación core', reps:'8/lado', search:'dead bug'},
+    ],
+    exercises:[
+      {name:'Remo a una mano con mancuerna', series:4, reps:'10/lado', rest_sec:60, search:'one arm dumbbell row'},
+      {name:'Jalón unilateral en máquina múltiple', series:3, reps:'10/lado', rest_sec:60, search:'single arm lat pulldown'},
+      {name:'Curl de bíceps alternado', series:3, reps:'12/lado', rest_sec:45, search:'alternating dumbbell curl'},
+      {name:'Pallof press con banda', series:3, reps:'10/lado', rest_sec:45, search:'pallof press'},
+      {name:'Russian twist con mancuerna', series:3, reps:'15/lado', rest_sec:45, search:'russian twist'},
+    ]},
+  { name:'Día 4 — Potencia + cardio', day_type:'gym', weekdays:[6],
+    warmups:[
+      {name:'Skipping bajo', reps:'20 seg', search:'high knees'},
+      {name:'Movilidad dinámica de tobillo/cadera', reps:'8/lado', search:'hip ankle mobility'},
+      {name:'Carioca lateral', reps:'15 m/lado', search:'lateral shuffle'},
+      {name:'Salto suave — activación', reps:'6', search:'jump squat'},
+    ],
+    exercises:[
+      {name:'Saltos al cajón', series:4, reps:'5', rest_sec:90, search:'box jump'},
+      {name:'Sentadilla a una pierna con salto suave', series:3, reps:'6/pierna', rest_sec:90, search:'jump squat'},
+      {name:'Zancada con salto alternando piernas', series:3, reps:'8/lado', rest_sec:75, search:'jumping lunge'},
+      {name:'Plancha lateral con elevación de cadera', series:3, reps:'12/lado', rest_sec:45, search:'side plank hip lift'},
+      {name:'Bici o elíptica — intervalos 20s fuerte / 40s suave × 8', series:1, reps:'15-20 min', rest_sec:0, search:null},
+    ]},
+];
+async function loadSuggestedRoutine2(){
+  if(!confirm('Esto va a crear 4 días nuevos con ejercicios precargados (no borra lo que ya tienes). ¿Continuar?')) return;
+  await loadExDb();
+  for(const dayDef of SUGGESTED_ROUTINE_2){
+    const sort_order = DAYS.length ? Math.max(...DAYS.map(d=>d.sort_order))+1 : 0;
+    const { data: newDay, error } = await sb.from('days').insert({ user_id: currentUser.id, name: dayDef.name, day_type: dayDef.day_type, weekdays: dayDef.weekdays, sort_order }).select().single();
+    if(error || !newDay) continue;
+    let i = 0;
+    for(const w of (dayDef.warmups || [])){
+      const match = findExDbMatch(w.search);
+      await sb.from('exercises').insert({
+        day_id: newDay.id, user_id: currentUser.id, name: w.name, series:1, reps: w.reps, rest_sec:0, category:'warmup', tempo:'Controlado',
+        cues: match ? ((match.steps_es && match.steps_es.length) ? match.steps_es : [match.instructions_es]) : [],
+        img: match ? match.image : null, gif: match ? match.gif_url : null,
+        sort_order: i++
+      });
+    }
+    for(const ex of dayDef.exercises){
+      const match = findExDbMatch(ex.search);
+      await sb.from('exercises').insert({
+        day_id: newDay.id, user_id: currentUser.id, name: ex.name, series: ex.series, reps: ex.reps, rest_sec: ex.rest_sec, category:'strength', tempo:'Controlado',
+        cues: match ? ((match.steps_es && match.steps_es.length) ? match.steps_es : [match.instructions_es]) : [],
+        img: match ? match.image : null, gif: match ? match.gif_url : null,
+        sort_order: i++
+      });
+    }
+    DAYS.push({ ...newDay, exercises: [], doneToday: false });
+  }
+  await loadDays();
+  showToast('✅ Rutina cargada — 4 días nuevos');
+}
+function findExDbMatch(searchTerms){
+  if(!searchTerms || !EXDB || !EXDB.length) return null;
+  const q = searchTerms.toLowerCase().split(' ').filter(Boolean);
+  let best = null, bestScore = 0;
+  for(const item of EXDB){
+    const name = item.name.toLowerCase();
+    let score = 0;
+    q.forEach(w => { if(name.includes(w)) score++; });
+    if(score > bestScore){ bestScore = score; best = item; }
+  }
+  return bestScore >= Math.max(1, Math.ceil(q.length * 0.6)) ? best : null;
+}
 async function loadSuggestedRoutine(){
   if(!confirm('Esto va a crear 4 días nuevos con ejercicios precargados (no borra lo que ya tienes). ¿Continuar?')) return;
+  await loadExDb(); // para intentar traer gifs reales de la base de datos
   for(const dayDef of SUGGESTED_ROUTINE){
     const sort_order = DAYS.length ? Math.max(...DAYS.map(d=>d.sort_order))+1 : 0;
     const { data: newDay, error } = await sb.from('days').insert({ user_id: currentUser.id, name: dayDef.name, day_type: dayDef.day_type, weekdays: dayDef.weekdays, sort_order }).select().single();
     if(error || !newDay) continue;
     let i = 0;
     for(const w of (dayDef.warmups || [])){
-      await sb.from('exercises').insert({ day_id: newDay.id, user_id: currentUser.id, name: w.name, series:1, reps: w.reps, rest_sec:0, category:'warmup', tempo:'Controlado', cues: [], sort_order: i++ });
+      const match = findExDbMatch(w.search);
+      await sb.from('exercises').insert({
+        day_id: newDay.id, user_id: currentUser.id, name: w.name, series:1, reps: w.reps, rest_sec:0, category:'warmup', tempo:'Controlado',
+        cues: match ? ((match.steps_es && match.steps_es.length) ? match.steps_es : [match.instructions_es]) : [],
+        img: match ? match.image : null, gif: match ? match.gif_url : null,
+        sort_order: i++
+      });
     }
     for(const ex of dayDef.exercises){
-      await sb.from('exercises').insert({ day_id: newDay.id, user_id: currentUser.id, name: ex.name, series: ex.series, reps: ex.reps, rest_sec: ex.rest_sec, category:'strength', tempo:'Controlado', cues: [], sort_order: i++ });
+      const match = findExDbMatch(ex.search);
+      await sb.from('exercises').insert({
+        day_id: newDay.id, user_id: currentUser.id, name: ex.name, series: ex.series, reps: ex.reps, rest_sec: ex.rest_sec, category:'strength', tempo:'Controlado',
+        cues: match ? ((match.steps_es && match.steps_es.length) ? match.steps_es : [match.instructions_es]) : [],
+        img: match ? match.image : null, gif: match ? match.gif_url : null,
+        sort_order: i++
+      });
     }
     DAYS.push({ ...newDay, exercises: [], doneToday: false });
   }
@@ -1487,13 +1613,19 @@ function isSuppDueOn(supp, dateObj){
   if(supp.frequency_type === 'daily') return true;
   return (supp.weekdays || []).includes(dateObj.getDay());
 }
-function computeSuppStreak(supp, takenSet){
+function suppSuccess(supp, log){
+  // ¿se cumplió la meta ese día? check → taken=true; quantity → amount >= target
+  if(!log) return false;
+  if(supp.habit_type === 'quantity') return (log.amount || 0) >= (supp.target_amount || 1);
+  return !!log.taken;
+}
+function computeSuppStreak(supp, logByDate){
   let streak = 0;
   const d = new Date();
   for(let i=0; i<60; i++){
     const dateStr = d.toISOString().slice(0,10);
     if(isSuppDueOn(supp, d)){
-      if(takenSet.has(dateStr)) streak++;
+      if(suppSuccess(supp, logByDate[dateStr])) streak++;
       else break;
     }
     d.setDate(d.getDate() - 1);
@@ -1508,7 +1640,7 @@ async function loadSupplements(){
 async function renderSupplements(){
   const box = document.getElementById('supplementsList');
   if(!SUPPLEMENTS.length){
-    box.innerHTML = `<div class="empty-state"><div class="big">💊</div>Todavía no tienes suplementos agregados.</div>`;
+    box.innerHTML = `<div class="empty-state"><div class="big">✅</div>Todavía no tienes hábitos agregados.</div>`;
     return;
   }
   const todayStr = new Date().toISOString().slice(0,10);
@@ -1517,32 +1649,62 @@ async function renderSupplements(){
   const sixtyAgoStr = new Date(Date.now() - 60*86400000).toISOString().slice(0,10);
 
   const { data: logs } = await sb.from('supplement_logs').select('*').eq('user_id', currentUser.id).gte('log_date', sixtyAgoStr).lte('log_date', todayStr);
-  const logMap = {};
+  const logMap = {}; // supp_id -> { dateStr -> logRow }
   (logs||[]).forEach(l => {
-    if(!logMap[l.supplement_id]) logMap[l.supplement_id] = new Set();
-    if(l.taken) logMap[l.supplement_id].add(l.log_date);
+    if(!logMap[l.supplement_id]) logMap[l.supplement_id] = {};
+    logMap[l.supplement_id][l.log_date] = l;
   });
 
   box.innerHTML = SUPPLEMENTS.map(s => {
-    const takenSet = logMap[s.id] || new Set();
-    const takenToday = takenSet.has(todayStr);
+    const logByDate = logMap[s.id] || {};
     const dueToday = isSuppDueOn(s, new Date());
-    const streak = computeSuppStreak(s, takenSet);
+    const streak = computeSuppStreak(s, logByDate);
+    const freqLabel = s.frequency_type === 'daily' ? 'Todos los días' : ('Solo ' + weekdaysLabel(s.weekdays).replace(' · ',''));
     const dots = days7.map(dStr => {
       const dObj = new Date(dStr + 'T00:00:00');
       const due = isSuppDueOn(s, dObj);
-      const taken = takenSet.has(dStr);
+      const ok = suppSuccess(s, logByDate[dStr]);
       const isToday = dStr === todayStr;
       let bg = 'var(--surface)';
       if(!due) bg = 'transparent';
-      else if(taken) bg = 'var(--green)';
-      return `<div onclick="toggleSupplementDate('${s.id}','${dStr}')" style="flex:1;height:18px;border-radius:5px;background:${bg};border:1px ${due?'solid':'dashed'} ${isToday?'var(--accent)':'var(--border)'};cursor:pointer;"></div>`;
+      else if(ok) bg = 'var(--green)';
+      const clickFn = s.habit_type === 'quantity' ? '' : `onclick="toggleSupplementDate('${s.id}','${dStr}')"`;
+      return `<div ${clickFn} style="flex:1;height:18px;border-radius:5px;background:${bg};border:1px ${due?'solid':'dashed'} ${isToday?'var(--accent)':'var(--border)'};${s.habit_type==='quantity'?'':'cursor:pointer;'}"></div>`;
     }).join('');
-    const freqLabel = s.frequency_type === 'daily' ? 'Todos los días' : ('Solo ' + weekdaysLabel(s.weekdays).replace(' · ',''));
+
+    if(s.habit_type === 'quantity'){
+      const todayLog = logByDate[todayStr];
+      const amount = todayLog ? (todayLog.amount || 0) : 0;
+      const target = s.target_amount || 1;
+      const pct = Math.min(100, Math.round((amount/target)*100));
+      const met = amount >= target;
+      return `
+        <div class="day-card" style="padding:12px 14px;opacity:${dueToday?'1':'.55'};">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+            <div style="flex:1;">
+              <div style="font-weight:700;font-size:.86rem;">${s.name} ${streak>0?`<span style="color:var(--yellow);font-size:.72rem;">🔥${streak}</span>`:''}</div>
+              <div style="font-size:.68rem;color:var(--muted);">${freqLabel}</div>
+            </div>
+            <button class="icon-btn" onclick="deleteSupplement('${s.id}')">🗑</button>
+          </div>
+          <div style="background:var(--surface);border-radius:8px;height:8px;overflow:hidden;margin-bottom:8px;">
+            <div style="width:${pct}%;height:100%;background:${met?'var(--green)':'var(--accent3)'};"></div>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;">
+            <button class="adj-btn" onclick="adjustHabitAmount('${s.id}',${-s.step_amount})">−</button>
+            <div style="flex:1;text-align:center;font-family:'Bebas Neue',sans-serif;font-size:1.3rem;${met?'color:var(--green);':''}">${amount} / ${target} ${s.unit||''}</div>
+            <button class="adj-btn" onclick="adjustHabitAmount('${s.id}',${s.step_amount})">+</button>
+          </div>
+          <div style="display:flex;gap:4px;margin-top:10px;">${dots}</div>
+        </div>`;
+    }
+
+    const todayLog = logByDate[todayStr];
+    const takenToday = !!(todayLog && todayLog.taken);
     return `
       <div class="day-card" style="padding:12px 14px;opacity:${dueToday?'1':'.55'};">
         <div style="display:flex;align-items:center;gap:10px;">
-          <button class="icon-btn" style="width:38px;height:38px;font-size:1.05rem;background:${takenToday?'var(--green)':'var(--surface)'};color:${takenToday?'#000':'var(--muted)'};border-color:${takenToday?'var(--green)':'var(--border)'};" onclick="toggleSupplementToday('${s.id}')" ${dueToday?'':'title="No corresponde hoy, pero puedes marcarlo igual"'}>${takenToday?'✓':'💊'}</button>
+          <button class="icon-btn" style="width:38px;height:38px;font-size:1.05rem;background:${takenToday?'var(--green)':'var(--surface)'};color:${takenToday?'#000':'var(--muted)'};border-color:${takenToday?'var(--green)':'var(--border)'};" onclick="toggleSupplementToday('${s.id}')" ${dueToday?'':'title="No corresponde hoy, pero puedes marcarlo igual"'}>${takenToday?'✓':'✅'}</button>
           <div style="flex:1;">
             <div style="font-weight:700;font-size:.86rem;">${s.name} ${streak>0?`<span style="color:var(--yellow);font-size:.72rem;">🔥${streak}</span>`:''}</div>
             <div style="font-size:.68rem;color:var(--muted);">${s.dose ? s.dose + ' · ' : ''}${freqLabel}</div>
@@ -1565,15 +1727,36 @@ async function toggleSupplementDate(suppId, dateStr){
   }
   await renderSupplements();
 }
-let pickedSuppFreq = 'daily', pickedSuppWeekdays = new Set();
+async function adjustHabitAmount(suppId, delta){
+  const todayStr = new Date().toISOString().slice(0,10);
+  const { data: existing } = await sb.from('supplement_logs').select('*').eq('supplement_id', suppId).eq('log_date', todayStr).maybeSingle();
+  const current = existing ? (existing.amount || 0) : 0;
+  const next = Math.max(0, Math.round((current + delta) * 100) / 100);
+  if(existing){
+    await sb.from('supplement_logs').update({ amount: next, taken: next > 0 }).eq('id', existing.id);
+  } else {
+    await sb.from('supplement_logs').insert({ user_id: currentUser.id, supplement_id: suppId, log_date: todayStr, amount: next, taken: next > 0 });
+  }
+  await renderSupplements();
+}
+let pickedSuppFreq = 'daily', pickedSuppWeekdays = new Set(), pickedSuppType = 'check';
 function openAddSupplement(){
   document.getElementById('suppName').value = '';
   document.getElementById('suppDose').value = '';
+  document.getElementById('suppUnit').value = '';
+  document.getElementById('suppTarget').value = '';
+  document.getElementById('suppStep').value = '';
   pickedSuppWeekdays = new Set();
+  pickSuppType('check');
   pickSuppFreq('daily');
   document.getElementById('suppOverlay').classList.add('show');
 }
 function closeSuppSheet(){ document.getElementById('suppOverlay').classList.remove('show'); }
+function pickSuppType(type){
+  pickedSuppType = type;
+  document.querySelectorAll('#suppTypePick button').forEach(b => b.classList.toggle('active', b.dataset.type === type));
+  document.getElementById('suppQuantityFields').classList.toggle('hidden', type !== 'quantity');
+}
 function pickSuppFreq(freq){
   pickedSuppFreq = freq;
   document.querySelectorAll('#suppFreqPick button').forEach(b => b.classList.toggle('active', b.dataset.freq === freq));
@@ -1595,17 +1778,24 @@ async function saveSupplement(){
   if(!name) return;
   const dose = document.getElementById('suppDose').value.trim();
   const sort_order = SUPPLEMENTS.length ? Math.max(...SUPPLEMENTS.map(s=>s.sort_order))+1 : 0;
-  await sb.from('supplements').insert({
+  const payload = {
     user_id: currentUser.id, name, dose: dose || null, sort_order,
     frequency_type: pickedSuppFreq,
-    weekdays: pickedSuppFreq === 'weekdays' ? Array.from(pickedSuppWeekdays) : []
-  });
+    weekdays: pickedSuppFreq === 'weekdays' ? Array.from(pickedSuppWeekdays) : [],
+    habit_type: pickedSuppType
+  };
+  if(pickedSuppType === 'quantity'){
+    payload.unit = document.getElementById('suppUnit').value.trim() || null;
+    payload.target_amount = parseFloat(document.getElementById('suppTarget').value) || 1;
+    payload.step_amount = parseFloat(document.getElementById('suppStep').value) || 1;
+  }
+  await sb.from('supplements').insert(payload);
   closeSuppSheet();
   await loadSupplements();
-  showToast('✅ Suplemento agregado');
+  showToast('✅ Hábito agregado');
 }
 async function deleteSupplement(id){
-  if(!confirm('¿Eliminar este suplemento?')) return;
+  if(!confirm('¿Eliminar este hábito?')) return;
   await sb.from('supplements').update({ active:false }).eq('id', id);
   await loadSupplements();
 }
