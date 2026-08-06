@@ -947,7 +947,24 @@ function renderExerciseCard(ex, dayId, isFirst, isLast){
       </div>
     </div>`;
 }
-function renderExercisesForDay(dayId){
+function todayRangeISO(){
+  const now = new Date();
+  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+  const end = new Date(now.getFullYear(), now.getMonth(), now.getDate()+1, 0, 0, 0);
+  return { startISO: start.toISOString(), endISO: end.toISOString() };
+}
+async function fetchTodaySetLogs(exerciseIds){
+  if(!exerciseIds.length) return {};
+  const { startISO, endISO } = todayRangeISO();
+  const { data } = await sb.from('set_logs').select('*').in('exercise_id', exerciseIds).gte('logged_at', startISO).lt('logged_at', endISO).order('logged_at');
+  const map = {}; // exId -> { serieNum -> logRow } (si hay duplicados, se queda con el último)
+  (data||[]).forEach(l => {
+    if(!map[l.exercise_id]) map[l.exercise_id] = {};
+    map[l.exercise_id][l.serie_number] = l;
+  });
+  return map;
+}
+async function renderExercisesForDay(dayId){
   const d = DAYS.find(x => x.id === dayId);
   const box = document.getElementById('exlist-' + dayId);
   if(!box) return;
@@ -963,7 +980,11 @@ function renderExercisesForDay(dayId){
     html += group.map((ex,i) => renderExerciseCard(ex, dayId, i===0, i===group.length-1)).join('');
   });
   box.innerHTML = html;
-  d.exercises.forEach(ex => renderSetRows(ex.id));
+  const logsMap = await fetchTodaySetLogs(d.exercises.map(e => e.id));
+  d.exercises.forEach(ex => {
+    renderSetRows(ex.id, logsMap[ex.id] || {});
+    updateExerciseCompletionBadge(ex.id);
+  });
 }
 function toggleExDetail(exId){
   document.getElementById('exdetail-' + exId).classList.toggle('open');
@@ -972,18 +993,23 @@ function findExercise(exId){
   for(const d of DAYS){ const ex = d.exercises.find(e => e.id === exId); if(ex) return ex; }
   return null;
 }
-function renderSetRows(exId){
+function renderSetRows(exId, presetLogs){
+  presetLogs = presetLogs || {};
   const ex = findExercise(exId);
   const box = document.getElementById('sets-' + exId);
   if(!box) return;
   let html = '';
   for(let i=1; i<=ex.series; i++){
+    const log = presetLogs[i];
+    const savedClass = log ? ' saved' : '';
+    const wVal = (log && log.weight != null) ? log.weight : '';
+    const rVal = (log && log.reps != null) ? log.reps : '';
     html += `
       <div class="set-row">
         <div class="set-num">${i}</div>
-        <input type="number" inputmode="decimal" placeholder="kg" id="w-${exId}-${i}">
-        <input type="number" inputmode="numeric" placeholder="${ex.reps}" id="r-${exId}-${i}">
-        <button class="set-save" id="save-${exId}-${i}" onclick="saveSet('${exId}',${i})">✓</button>
+        <input type="number" inputmode="decimal" placeholder="kg" id="w-${exId}-${i}" value="${wVal}">
+        <input type="number" inputmode="numeric" placeholder="${ex.reps}" id="r-${exId}-${i}" value="${rVal}">
+        <button class="set-save${savedClass}" id="save-${exId}-${i}" onclick="saveSet('${exId}',${i})">✓</button>
       </div>`;
   }
   box.innerHTML = html;
@@ -1158,13 +1184,25 @@ async function moveExercise(exId, dayId, direction){
 // ═══════════════════════════════════════════
 // SESSIONS (marcar día como hecho → alimenta calendario)
 // ═══════════════════════════════════════════
+async function linkTodaySetLogsToSession(dayId, sessionId){
+  const d = DAYS.find(x => x.id === dayId);
+  if(!d || !d.exercises.length) return;
+  const { startISO, endISO } = todayRangeISO();
+  await sb.from('set_logs')
+    .update({ session_id: sessionId })
+    .in('exercise_id', d.exercises.map(e => e.id))
+    .is('session_id', null)
+    .gte('logged_at', startISO)
+    .lt('logged_at', endISO);
+}
 async function toggleSessionDone(dayId){
   const d = DAYS.find(x => x.id === dayId);
   const todayStr = new Date().toISOString().slice(0,10);
   if(d.doneToday){
     await sb.from('sessions').delete().eq('user_id', currentUser.id).eq('day_id', dayId).eq('session_date', todayStr);
   } else {
-    await sb.from('sessions').insert({ user_id: currentUser.id, day_id: dayId, session_date: todayStr, day_type: d.day_type, completed: true });
+    const { data: newSession } = await sb.from('sessions').insert({ user_id: currentUser.id, day_id: dayId, session_date: todayStr, day_type: d.day_type, completed: true }).select().single();
+    if(newSession) await linkTodaySetLogsToSession(dayId, newSession.id);
     showToast('🔥 ¡Sesión registrada!');
   }
   await loadDays();
@@ -1413,7 +1451,7 @@ function resetTimerCues(){
 // MODO SESIÓN (checklist en vivo, separado de armar la rutina)
 // ═══════════════════════════════════════════
 let sessionModeDayId = null;
-function openSessionMode(dayId){
+async function openSessionMode(dayId){
   sessionModeDayId = dayId;
   const d = DAYS.find(x => x.id === dayId);
   if(!d) return;
@@ -1430,7 +1468,11 @@ function openSessionMode(dayId){
       html += group.map(ex => renderExerciseCardSession(ex)).join('');
     });
     box.innerHTML = html;
-    d.exercises.forEach(ex => renderSetRowsSession(ex.id));
+    const logsMap = await fetchTodaySetLogs(d.exercises.map(e => e.id));
+    d.exercises.forEach(ex => {
+      renderSetRowsSession(ex.id, logsMap[ex.id] || {});
+      updateExerciseCompletionBadge(ex.id);
+    });
   }
   document.getElementById('sessionModeFinishBtn').textContent = d.doneToday ? '✅ Ya marcada como hecha hoy' : '✅ Finalizar sesión';
   document.getElementById('sessionModeOverlay').classList.add('show');
@@ -1461,18 +1503,23 @@ function renderExerciseCardSession(ex){
 function toggleExDetailSession(exId){
   document.getElementById('sm-exdetail-' + exId).classList.toggle('open');
 }
-function renderSetRowsSession(exId){
+function renderSetRowsSession(exId, presetLogs){
+  presetLogs = presetLogs || {};
   const ex = findExercise(exId);
   const box = document.getElementById('sm-sets-' + exId);
   if(!box) return;
   let html = '';
   for(let i=1; i<=ex.series; i++){
+    const log = presetLogs[i];
+    const savedClass = log ? ' saved' : '';
+    const wVal = (log && log.weight != null) ? log.weight : '';
+    const rVal = (log && log.reps != null) ? log.reps : '';
     html += `
       <div class="set-row">
         <div class="set-num">${i}</div>
-        <input type="number" inputmode="decimal" placeholder="kg" id="sm-w-${exId}-${i}">
-        <input type="number" inputmode="numeric" placeholder="${ex.reps}" id="sm-r-${exId}-${i}">
-        <button class="set-save" id="sm-save-${exId}-${i}" onclick="saveSetSession('${exId}',${i})">✓</button>
+        <input type="number" inputmode="decimal" placeholder="kg" id="sm-w-${exId}-${i}" value="${wVal}">
+        <input type="number" inputmode="numeric" placeholder="${ex.reps}" id="sm-r-${exId}-${i}" value="${rVal}">
+        <button class="set-save${savedClass}" id="sm-save-${exId}-${i}" onclick="saveSetSession('${exId}',${i})">✓</button>
       </div>`;
   }
   box.innerHTML = html;
@@ -1497,8 +1544,9 @@ async function finishSessionMode(){
   if(!d) return;
   if(d.doneToday){ closeSessionMode(); return; }
   const todayStr = new Date().toISOString().slice(0,10);
-  const { error } = await sb.from('sessions').insert({ user_id: currentUser.id, day_id: d.id, session_date: todayStr, day_type: d.day_type, completed: true });
+  const { data: newSession, error } = await sb.from('sessions').insert({ user_id: currentUser.id, day_id: d.id, session_date: todayStr, day_type: d.day_type, completed: true }).select().single();
   if(error){ showToast('⚠️ ' + error.message); return; }
+  if(newSession) await linkTodaySetLogsToSession(d.id, newSession.id);
   showToast('🔥 ¡Sesión completada!');
   closeSessionMode();
   await loadDays();
