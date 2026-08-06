@@ -53,6 +53,19 @@
 
   /* DAYS */
   .day-card{background:var(--card);border:1px solid var(--border);border-radius:12px;margin-bottom:12px;overflow:hidden;}
+  .habit-card{border-radius:20px;padding:16px;margin-bottom:12px;background:var(--card);border:1px solid var(--border);transition:.2s;}
+  .habit-card.done{background:linear-gradient(135deg,var(--green),#22a876);border:none;}
+  .habit-streak-badge{display:inline-flex;align-items:center;gap:3px;font-size:.68rem;font-weight:700;color:var(--yellow);margin-bottom:6px;}
+  .habit-card.done .habit-streak-badge{color:#063d24;}
+  .habit-row{display:flex;align-items:center;gap:12px;}
+  .habit-icon{font-size:1.7rem;flex-shrink:0;width:38px;text-align:center;}
+  .habit-name{font-weight:700;font-size:.92rem;}
+  .habit-card.done .habit-name{color:#04160d;}
+  .habit-meta{font-size:.68rem;color:var(--muted);margin-top:1px;}
+  .habit-card.done .habit-meta{color:#0a3b24;}
+  .habit-check-btn{width:46px;height:46px;border-radius:50%;border:2px solid var(--border);background:none;color:var(--muted);font-size:1.3rem;flex-shrink:0;display:flex;align-items:center;justify-content:center;}
+  .habit-card.done .habit-check-btn{background:#fff;border:none;color:var(--green);}
+  .habit-del-btn{position:absolute;top:10px;right:10px;background:none;border:none;color:inherit;opacity:.5;font-size:.8rem;}
   .day-head{display:flex;align-items:center;gap:10px;padding:14px;}
   .day-type-badge{font-size:1.1rem;}
   .day-name{flex:1;font-weight:700;font-size:.95rem;}
@@ -308,7 +321,10 @@
 <div class="sheet-overlay" id="suppOverlay" onclick="if(event.target===this)closeSuppSheet()">
   <div class="sheet">
     <div class="sheet-head"><h3>＋ Hábito</h3><button class="icon-btn" onclick="closeSuppSheet()">✕</button></div>
-    <input type="text" id="suppName" placeholder="Nombre (ej: Creatina, Beber agua)">
+    <div style="display:flex;gap:8px;">
+      <input type="text" id="suppIcon" placeholder="🥕" maxlength="4" style="width:64px;text-align:center;flex-shrink:0;">
+      <input type="text" id="suppName" placeholder="Nombre (ej: Creatina, Beber agua)" style="flex:1;">
+    </div>
     <div class="type-pick" id="suppTypePick">
       <button data-type="check" onclick="pickSuppType('check')">✅ Simple (hecho/no hecho)</button>
       <button data-type="quantity" onclick="pickSuppType('quantity')">🔢 Cantidad (ej: litros)</button>
@@ -901,7 +917,7 @@ function renderExerciseCard(ex, dayId, isFirst, isLast){
         <div style="display:flex;align-items:center;gap:10px;flex:1;cursor:pointer;" onclick="toggleExDetail('${ex.id}')">
           ${ex.img ? `<img class="ex-thumb" src="${ex.img}" onerror="this.style.display='none'">` : ''}
           <div style="flex:1;">
-            <div class="ex-name">${ex.name}</div>
+            <div class="ex-name">${ex.name} <span id="ex-done-badge-${ex.id}" class="hidden" style="color:var(--green);">✅</span></div>
             <div class="ex-meta">${ex.series} series × ${ex.reps} · ${ex.rest_sec}s descanso</div>
           </div>
         </div>
@@ -986,6 +1002,47 @@ async function saveSet(exId, serieNum){
   const btn = document.getElementById(`save-${exId}-${serieNum}`);
   btn.classList.add('saved');
   showToast('✅ Serie guardada');
+  updateExerciseCompletionBadge(exId);
+}
+function updateExerciseCompletionBadge(exId){
+  const ex = findExercise(exId);
+  if(!ex) return;
+  let doneCount = 0;
+  for(let i=1; i<=ex.series; i++){
+    const b1 = document.getElementById(`save-${exId}-${i}`);
+    const b2 = document.getElementById(`sm-save-${exId}-${i}`);
+    if((b1 && b1.classList.contains('saved')) || (b2 && b2.classList.contains('saved'))) doneCount++;
+  }
+  const complete = doneCount >= ex.series;
+  const badge1 = document.getElementById(`ex-done-badge-${exId}`);
+  const badge2 = document.getElementById(`sm-ex-done-badge-${exId}`);
+  if(badge1) badge1.classList.toggle('hidden', !complete);
+  if(badge2) badge2.classList.toggle('hidden', !complete);
+}
+function readSetInput(exId, serieNum, prefix){
+  const wEl = document.getElementById(`${prefix}w-${exId}-${serieNum}`);
+  const rEl = document.getElementById(`${prefix}r-${exId}-${serieNum}`);
+  return { w: wEl ? wEl.value : '', r: rEl ? rEl.value : '' };
+}
+async function autoMarkSet(exId, serieNum){
+  const a = readSetInput(exId, serieNum, '');
+  const b = readSetInput(exId, serieNum, 'sm-');
+  const w = a.w || b.w;
+  const r = a.r || b.r;
+  if(w || r){
+    await sb.from('set_logs').insert({
+      user_id: currentUser.id,
+      exercise_id: exId,
+      serie_number: serieNum,
+      weight: w ? parseFloat(w) : null,
+      reps: r ? parseInt(r) : null
+    });
+  }
+  const saveBtn1 = document.getElementById(`save-${exId}-${serieNum}`);
+  const saveBtn2 = document.getElementById(`sm-save-${exId}-${serieNum}`);
+  if(saveBtn1) saveBtn1.classList.add('saved');
+  if(saveBtn2) saveBtn2.classList.add('saved');
+  updateExerciseCompletionBadge(exId);
 }
 
 let addExContext = null; // dayId
@@ -1328,6 +1385,7 @@ function updateTimerUI(){
 function timerSkip(){
   if(!timerState) return;
   if(timerState.phase === 'work'){
+    autoMarkSet(timerState.ex.id, timerState.currentSerie);
     timerState.phase = 'rest';
     timerState.restRemaining = timerState.restSec;
   } else {
@@ -1386,7 +1444,7 @@ function renderExerciseCardSession(ex){
       <div class="ex-head" onclick="toggleExDetailSession('${ex.id}')" style="cursor:pointer;">
         ${ex.img ? `<img class="ex-thumb" src="${ex.img}" onerror="this.style.display='none'">` : ''}
         <div style="flex:1;">
-          <div class="ex-name">${ex.name}</div>
+          <div class="ex-name">${ex.name} <span id="sm-ex-done-badge-${ex.id}" class="hidden" style="color:var(--green);">✅</span></div>
           <div class="ex-meta">${ex.series} series × ${ex.reps} · ${ex.rest_sec}s descanso</div>
         </div>
       </div>
@@ -1432,6 +1490,7 @@ async function saveSetSession(exId, serieNum){
   });
   document.getElementById(`sm-save-${exId}-${serieNum}`).classList.add('saved');
   showToast('✅ Serie guardada');
+  updateExerciseCompletionBadge(exId);
 }
 async function finishSessionMode(){
   const d = DAYS.find(x => x.id === sessionModeDayId);
@@ -1743,6 +1802,8 @@ async function renderSupplements(){
     const streak = computeSuppStreak(s, logByDate);
     const freqLabel = s.frequency_type === 'daily' ? 'Todos los días' : ('Solo ' + weekdaysLabel(s.weekdays).replace(' · ',''));
     const since = s.started_on ? `Desde ${new Date(s.started_on+'T00:00:00').toLocaleDateString('es-CL')} · día ${daysSince(s.started_on)+1}` : '';
+    const icon = s.icon || (s.habit_type === 'quantity' ? '💧' : '✅');
+    const streakBadge = streak > 0 ? `<div class="habit-streak-badge">🔥 ${streak}</div>` : '';
 
     if(s.habit_type === 'quantity'){
       const selLog = logByDate[selectedHabitDate];
@@ -1751,21 +1812,23 @@ async function renderSupplements(){
       const pct = Math.min(100, Math.round((amount/target)*100));
       const met = amount >= target;
       return `
-        <div class="day-card" style="padding:12px 14px;opacity:${dueSelected?'1':'.55'};">
-          <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+        <div class="habit-card ${met?'done':''}" style="position:relative;opacity:${dueSelected?'1':'.6'};">
+          <button class="habit-del-btn" onclick="deleteSupplement('${s.id}')">🗑</button>
+          ${streakBadge}
+          <div class="habit-row" style="margin-bottom:10px;">
+            <div class="habit-icon">${icon}</div>
             <div style="flex:1;">
-              <div style="font-weight:700;font-size:.86rem;">${s.name} ${streak>0?`<span style="color:var(--yellow);font-size:.72rem;">🔥${streak}</span>`:''}</div>
-              <div style="font-size:.68rem;color:var(--muted);">${freqLabel}${since?' · '+since:''}</div>
+              <div class="habit-name">${s.name}</div>
+              <div class="habit-meta">${freqLabel}${since?' · '+since:''}</div>
             </div>
-            <button class="icon-btn" onclick="deleteSupplement('${s.id}')">🗑</button>
           </div>
-          <div style="background:var(--surface);border-radius:8px;height:8px;overflow:hidden;margin-bottom:8px;">
-            <div style="width:${pct}%;height:100%;background:${met?'var(--green)':'var(--accent3)'};"></div>
+          <div style="background:${met?'rgba(0,0,0,.15)':'var(--surface)'};border-radius:8px;height:8px;overflow:hidden;margin-bottom:10px;">
+            <div style="width:${pct}%;height:100%;background:${met?'#04160d':'var(--accent3)'};"></div>
           </div>
           <div style="display:flex;align-items:center;gap:10px;">
-            <button class="adj-btn" onclick="adjustHabitAmount('${s.id}',${-s.step_amount})">−</button>
-            <div style="flex:1;text-align:center;font-family:'Bebas Neue',sans-serif;font-size:1.3rem;${met?'color:var(--green);':''}">${amount} / ${target} ${s.unit||''}</div>
-            <button class="adj-btn" onclick="adjustHabitAmount('${s.id}',${s.step_amount})">+</button>
+            <button class="adj-btn" style="${met?'background:rgba(255,255,255,.25);border-color:transparent;color:#04160d;':''}" onclick="adjustHabitAmount('${s.id}',${-s.step_amount})">−</button>
+            <div style="flex:1;text-align:center;font-family:'Bebas Neue',sans-serif;font-size:1.3rem;${met?'color:#04160d;':''}">${amount} / ${target} ${s.unit||''}</div>
+            <button class="adj-btn" style="${met?'background:rgba(255,255,255,.25);border-color:transparent;color:#04160d;':''}" onclick="adjustHabitAmount('${s.id}',${s.step_amount})">+</button>
           </div>
         </div>`;
     }
@@ -1773,14 +1836,16 @@ async function renderSupplements(){
     const selLog = logByDate[selectedHabitDate];
     const takenSelected = !!(selLog && selLog.taken);
     return `
-      <div class="day-card" style="padding:12px 14px;opacity:${dueSelected?'1':'.55'};">
-        <div style="display:flex;align-items:center;gap:10px;">
-          <button class="icon-btn" style="width:38px;height:38px;font-size:1.05rem;background:${takenSelected?'var(--green)':'var(--surface)'};color:${takenSelected?'#000':'var(--muted)'};border-color:${takenSelected?'var(--green)':'var(--border)'};" onclick="toggleSupplementDate('${s.id}',selectedHabitDate)" ${dueSelected?'':'title="No corresponde este día, pero puedes marcarlo igual"'}>${takenSelected?'✓':'✅'}</button>
+      <div class="habit-card ${takenSelected?'done':''}" style="position:relative;opacity:${dueSelected?'1':'.6'};">
+        <button class="habit-del-btn" onclick="deleteSupplement('${s.id}')">🗑</button>
+        ${streakBadge}
+        <div class="habit-row">
+          <div class="habit-icon">${icon}</div>
           <div style="flex:1;">
-            <div style="font-weight:700;font-size:.86rem;">${s.name} ${streak>0?`<span style="color:var(--yellow);font-size:.72rem;">🔥${streak}</span>`:''}</div>
-            <div style="font-size:.68rem;color:var(--muted);">${s.dose ? s.dose + ' · ' : ''}${freqLabel}${since?' · '+since:''}</div>
+            <div class="habit-name">${s.name}</div>
+            <div class="habit-meta">${s.dose ? s.dose + ' · ' : ''}${freqLabel}${since?' · '+since:''}</div>
           </div>
-          <button class="icon-btn" onclick="deleteSupplement('${s.id}')">🗑</button>
+          <button class="habit-check-btn" onclick="toggleSupplementDate('${s.id}',selectedHabitDate)" ${dueSelected?'':'title="No corresponde este día, pero puedes marcarlo igual"'}>${takenSelected?'✓':'+'}</button>
         </div>
       </div>`;
   }).join('');
@@ -1809,6 +1874,7 @@ async function adjustHabitAmount(suppId, delta){
 }
 let pickedSuppFreq = 'daily', pickedSuppWeekdays = new Set(), pickedSuppType = 'check';
 function openAddSupplement(){
+  document.getElementById('suppIcon').value = '';
   document.getElementById('suppName').value = '';
   document.getElementById('suppDose').value = '';
   document.getElementById('suppUnit').value = '';
@@ -1853,7 +1919,8 @@ async function saveSupplement(){
     frequency_type: pickedSuppFreq,
     weekdays: pickedSuppFreq === 'weekdays' ? Array.from(pickedSuppWeekdays) : [],
     habit_type: pickedSuppType,
-    started_on: startedOn
+    started_on: startedOn,
+    icon: document.getElementById('suppIcon').value.trim() || null
   };
   if(pickedSuppType === 'quantity'){
     payload.unit = document.getElementById('suppUnit').value.trim() || null;
