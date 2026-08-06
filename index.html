@@ -67,6 +67,7 @@
   .habit-check-btn{width:46px;height:46px;border-radius:50%;border:2px solid var(--border);background:none;color:var(--muted);font-size:1.3rem;flex-shrink:0;display:flex;align-items:center;justify-content:center;}
   .habit-card.done .habit-check-btn{background:#fff;border:none;color:var(--green);}
   .habit-del-btn{position:absolute;top:10px;right:10px;background:none;border:none;color:inherit;opacity:.5;font-size:.8rem;}
+  .habit-edit-btn{position:absolute;top:10px;right:38px;background:none;border:none;color:inherit;opacity:.5;font-size:.8rem;}
   .day-head{display:flex;align-items:center;gap:10px;padding:14px;}
   .day-type-badge{font-size:1.1rem;}
   .day-name{flex:1;font-weight:700;font-size:.95rem;}
@@ -198,9 +199,9 @@
         <div id="inicioWeekStat" style="font-family:'Bebas Neue',sans-serif;font-size:1.8rem;color:var(--accent);">0/0</div>
         <div style="font-size:.66rem;color:var(--muted);text-transform:uppercase;">Esta semana</div>
       </div>
-      <div style="flex:1;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px;text-align:center;">
+      <div style="flex:1;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px;text-align:center;cursor:pointer;" onclick="switchTab('calendario')">
         <div id="inicioMonthStat" style="font-family:'Bebas Neue',sans-serif;font-size:1.8rem;color:var(--accent3);">0</div>
-        <div style="font-size:.66rem;color:var(--muted);text-transform:uppercase;">Este mes</div>
+        <div style="font-size:.66rem;color:var(--muted);text-transform:uppercase;">Este mes ›</div>
       </div>
     </div>
     <div id="inicioTodayBox"></div>
@@ -321,7 +322,7 @@
 <!-- ADD HABIT SHEET -->
 <div class="sheet-overlay" id="suppOverlay" onclick="if(event.target===this)closeSuppSheet()">
   <div class="sheet">
-    <div class="sheet-head"><h3>＋ Hábito</h3><button class="icon-btn" onclick="closeSuppSheet()">✕</button></div>
+    <div class="sheet-head"><h3 id="suppSheetTitle">＋ Hábito</h3><button class="icon-btn" onclick="closeSuppSheet()">✕</button></div>
     <div style="display:flex;gap:8px;">
       <input type="text" id="suppIcon" placeholder="🥕" maxlength="4" style="width:64px;text-align:center;flex-shrink:0;">
       <input type="text" id="suppName" placeholder="Nombre (ej: Creatina, Beber agua)" style="flex:1;">
@@ -1185,6 +1186,23 @@ async function moveExercise(exId, dayId, direction){
 // ═══════════════════════════════════════════
 // SESSIONS (marcar día como hecho → alimenta calendario)
 // ═══════════════════════════════════════════
+async function autoSaveUnsavedSets(dayId){
+  const d = DAYS.find(x => x.id === dayId);
+  if(!d) return;
+  for(const ex of d.exercises){
+    for(let i=1; i<=ex.series; i++){
+      const b1 = document.getElementById(`save-${ex.id}-${i}`);
+      const b2 = document.getElementById(`sm-save-${ex.id}-${i}`);
+      const alreadySaved = (b1 && b1.classList.contains('saved')) || (b2 && b2.classList.contains('saved'));
+      if(alreadySaved) continue;
+      const a = readSetInput(ex.id, i, '');
+      const b = readSetInput(ex.id, i, 'sm-');
+      if(a.w || a.r || b.w || b.r){
+        await autoMarkSet(ex.id, i);
+      }
+    }
+  }
+}
 async function linkTodaySetLogsToSession(dayId, sessionId){
   const d = DAYS.find(x => x.id === dayId);
   if(!d || !d.exercises.length) return;
@@ -1202,6 +1220,7 @@ async function toggleSessionDone(dayId){
   if(d.doneToday){
     await sb.from('sessions').delete().eq('user_id', currentUser.id).eq('day_id', dayId).eq('session_date', todayStr);
   } else {
+    await autoSaveUnsavedSets(dayId);
     const { data: newSession } = await sb.from('sessions').insert({ user_id: currentUser.id, day_id: dayId, session_date: todayStr, day_type: d.day_type, completed: true }).select().single();
     if(newSession) await linkTodaySetLogsToSession(dayId, newSession.id);
     showToast('🔥 ¡Sesión registrada!');
@@ -1352,6 +1371,7 @@ function saveRestOverride(){ try{ localStorage.setItem('rutina_rest_override', J
 function launchTimer(exId){
   const ex = findExercise(exId);
   if(!ex) return;
+  getAudioCtx(); // desbloquea el audio en iOS al iniciar desde un toque
   const restSec = getRestSec(ex.id, ex.rest_sec);
   timerState = { ex, phase:'work', currentSerie:1, totalSeries:ex.series, restSec, workSec:0, restRemaining:restSec, running:true };
   const skipBtn = document.getElementById('tcSkip');
@@ -1374,6 +1394,31 @@ function adjustRestSec(delta){
   updateTimerUI();
 }
 function fmt(s){ const m=Math.floor(s/60), sec=s%60; return `${m}:${sec.toString().padStart(2,'0')}`; }
+let audioCtx = null;
+function getAudioCtx(){
+  if(!audioCtx){
+    try{ audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }catch(e){}
+  }
+  if(audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+  return audioCtx;
+}
+function playBeep(freq, duration){
+  const ctx = getAudioCtx();
+  if(!ctx) return;
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.connect(gain); gain.connect(ctx.destination);
+  osc.frequency.value = freq;
+  osc.type = 'sine';
+  const t = ctx.currentTime;
+  gain.gain.setValueAtTime(0.001, t);
+  gain.gain.exponentialRampToValueAtTime(0.35, t+0.01);
+  gain.gain.exponentialRampToValueAtTime(0.001, t+duration);
+  osc.start(t);
+  osc.stop(t+duration+0.05);
+}
+function playRestEndSound(){ playBeep(880,0.15); setTimeout(()=>playBeep(880,0.15),180); }
+function playSessionDoneSound(){ playBeep(660,0.12); setTimeout(()=>playBeep(880,0.12),140); setTimeout(()=>playBeep(1100,0.2),280); }
 function tickTimer(){
   if(!timerState || !timerState.running) return;
   if(timerState.phase === 'work'){
@@ -1386,11 +1431,13 @@ function tickTimer(){
         clearInterval(timerInterval);
         document.getElementById('timerDigits').textContent = '✓';
         document.getElementById('timerBadge').textContent = '¡COMPLETADO!';
+        playSessionDoneSound();
         return;
       }
       timerState.phase = 'work';
       timerState.workSec = 0;
       timerState.restRemaining = timerState.restSec;
+      playRestEndSound();
     }
   }
   updateTimerUI();
@@ -1544,10 +1591,12 @@ async function finishSessionMode(){
   const d = DAYS.find(x => x.id === sessionModeDayId);
   if(!d) return;
   if(d.doneToday){ closeSessionMode(); return; }
+  await autoSaveUnsavedSets(d.id);
   const todayStr = new Date().toISOString().slice(0,10);
   const { data: newSession, error } = await sb.from('sessions').insert({ user_id: currentUser.id, day_id: d.id, session_date: todayStr, day_type: d.day_type, completed: true }).select().single();
   if(error){ showToast('⚠️ ' + error.message); return; }
   if(newSession) await linkTodaySetLogsToSession(d.id, newSession.id);
+  playSessionDoneSound();
   showToast('🔥 ¡Sesión completada!');
   closeSessionMode();
   await loadDays();
@@ -1862,6 +1911,7 @@ async function renderSupplements(){
       const met = amount >= target;
       return `
         <div class="habit-card ${met?'done':''}" style="position:relative;opacity:${dueSelected?'1':'.6'};">
+          <button class="habit-edit-btn" onclick="openEditSupplement('${s.id}')">✎</button>
           <button class="habit-del-btn" onclick="deleteSupplement('${s.id}')">🗑</button>
           ${streakBadge}
           <div class="habit-row" style="margin-bottom:10px;">
@@ -1886,7 +1936,8 @@ async function renderSupplements(){
     const takenSelected = !!(selLog && selLog.taken);
     return `
       <div class="habit-card ${takenSelected?'done':''}" style="position:relative;opacity:${dueSelected?'1':'.6'};">
-        <button class="habit-del-btn" onclick="deleteSupplement('${s.id}')">🗑</button>
+        <button class="habit-edit-btn" onclick="openEditSupplement('${s.id}')">✎</button>
+          <button class="habit-del-btn" onclick="deleteSupplement('${s.id}')">🗑</button>
         ${streakBadge}
         <div class="habit-row">
           <div class="habit-icon">${icon}</div>
@@ -1921,8 +1972,10 @@ async function adjustHabitAmount(suppId, delta){
   await renderHabitsCalendar();
   await renderSupplements();
 }
-let pickedSuppFreq = 'daily', pickedSuppWeekdays = new Set(), pickedSuppType = 'check';
+let pickedSuppFreq = 'daily', pickedSuppWeekdays = new Set(), pickedSuppType = 'check', editingSuppId = null;
 function openAddSupplement(){
+  editingSuppId = null;
+  document.getElementById('suppSheetTitle').textContent = '＋ Hábito';
   document.getElementById('suppIcon').value = '';
   document.getElementById('suppName').value = '';
   document.getElementById('suppDose').value = '';
@@ -1933,6 +1986,23 @@ function openAddSupplement(){
   pickedSuppWeekdays = new Set();
   pickSuppType('check');
   pickSuppFreq('daily');
+  document.getElementById('suppOverlay').classList.add('show');
+}
+function openEditSupplement(id){
+  const s = SUPPLEMENTS.find(x => x.id === id);
+  if(!s) return;
+  editingSuppId = id;
+  document.getElementById('suppSheetTitle').textContent = '✎ Editar hábito';
+  document.getElementById('suppIcon').value = s.icon || '';
+  document.getElementById('suppName').value = s.name || '';
+  document.getElementById('suppDose').value = s.dose || '';
+  document.getElementById('suppUnit').value = s.unit || '';
+  document.getElementById('suppTarget').value = s.target_amount || '';
+  document.getElementById('suppStep').value = s.step_amount || '';
+  document.getElementById('suppStartedOn').value = s.started_on || new Date().toISOString().slice(0,10);
+  pickedSuppWeekdays = new Set(s.weekdays || []);
+  pickSuppType(s.habit_type || 'check');
+  pickSuppFreq(s.frequency_type || 'daily');
   document.getElementById('suppOverlay').classList.add('show');
 }
 function closeSuppSheet(){ document.getElementById('suppOverlay').classList.remove('show'); }
@@ -1962,24 +2032,36 @@ async function saveSupplement(){
   if(!name) return;
   const dose = document.getElementById('suppDose').value.trim();
   const startedOn = document.getElementById('suppStartedOn').value || new Date().toISOString().slice(0,10);
-  const sort_order = SUPPLEMENTS.length ? Math.max(...SUPPLEMENTS.map(s=>s.sort_order))+1 : 0;
   const payload = {
-    user_id: currentUser.id, name, dose: dose || null, sort_order,
+    name, dose: dose || null,
     frequency_type: pickedSuppFreq,
     weekdays: pickedSuppFreq === 'weekdays' ? Array.from(pickedSuppWeekdays) : [],
     habit_type: pickedSuppType,
     started_on: startedOn,
-    icon: document.getElementById('suppIcon').value.trim() || null
+    icon: document.getElementById('suppIcon').value.trim() || null,
+    unit: null, target_amount: null, step_amount: 1
   };
   if(pickedSuppType === 'quantity'){
     payload.unit = document.getElementById('suppUnit').value.trim() || null;
     payload.target_amount = parseFloat(document.getElementById('suppTarget').value) || 1;
     payload.step_amount = parseFloat(document.getElementById('suppStep').value) || 1;
   }
-  await sb.from('supplements').insert(payload);
+  let error;
+  if(editingSuppId){
+    ({ error } = await sb.from('supplements').update(payload).eq('id', editingSuppId));
+  } else {
+    payload.user_id = currentUser.id;
+    payload.sort_order = SUPPLEMENTS.length ? Math.max(...SUPPLEMENTS.map(s=>s.sort_order))+1 : 0;
+    ({ error } = await sb.from('supplements').insert(payload));
+  }
+  if(error){
+    showToast('⚠️ No se guardó: ' + error.message);
+    console.error(error);
+    return;
+  }
   closeSuppSheet();
   await loadSupplements();
-  showToast('✅ Hábito agregado');
+  showToast(editingSuppId ? '✅ Hábito actualizado' : '✅ Hábito agregado');
 }
 async function deleteSupplement(id){
   if(!confirm('¿Eliminar este hábito?')) return;
@@ -2025,6 +2107,10 @@ async function renderInicio(){
   document.getElementById('inicioWeekStrip').innerHTML = weekDates.map((d,i) => {
     const dateStr = d.toISOString().slice(0,10);
     calSessionsCache[dateStr] = sessByDate[dateStr] || calSessionsCache[dateStr] || [];
+    const daySessions = calSessionsCache[dateStr];
+    const plannedDays = DAYS.filter(dd => (dd.weekdays||[]).includes(d.getDay()));
+    const dayTypeForIcon = daySessions.length ? daySessions[0].day_type : (plannedDays.length ? plannedDays[0].day_type : null);
+    const dayIcon = dayTypeForIcon ? (DAY_TYPE_ICON[dayTypeForIcon] || '✨') : '';
     const st = getDateStatus(dateStr, d.getDay(), todayStr);
     const isToday = dateStr === todayStr;
     let style = 'background:var(--card);color:var(--muted);border:1px solid var(--border);';
@@ -2032,9 +2118,12 @@ async function renderInicio(){
     else if(st.status === 'pending') style = `background:var(--card);color:${st.color};border:2px dashed ${st.color};font-weight:700;`;
     else if(st.status === 'missed') style = `background:rgba(239,68,68,.12);color:var(--danger);border:1px solid var(--danger);font-weight:700;`;
     if(isToday) style += 'box-shadow:0 0 0 2px var(--text) inset;';
-    return `<div style="text-align:center;">
+    return `<div style="text-align:center;cursor:pointer;" onclick="switchTab('calendario')">
       <div style="font-size:.6rem;color:var(--muted);margin-bottom:3px;">${labels[i]}</div>
-      <div style="aspect-ratio:1;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:.78rem;${style}">${d.getDate()}</div>
+      <div style="aspect-ratio:1;border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:.72rem;gap:1px;${style}">
+        <span style="font-size:.85rem;line-height:1;">${dayIcon}</span>
+        <span>${d.getDate()}</span>
+      </div>
     </div>`;
   }).join('');
 
