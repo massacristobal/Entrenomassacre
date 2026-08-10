@@ -438,6 +438,14 @@
 const SUPABASE_URL = 'https://hlmmwiwjtfqvfodkauxd.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_fcGziq2RG3uQPBU9bGPZRQ_O5YQIR9X';
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+function localDateStr(d){
+  d = d || new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth()+1).padStart(2,'0');
+  const day = String(d.getDate()).padStart(2,'0');
+  return `${y}-${m}-${day}`;
+}
+
 
 let currentUser = null;
 let authMode = 'login'; // 'login' | 'signup'
@@ -608,7 +616,7 @@ async function loadDays(){
   const { data: days, error } = await sb.from('days').select('*').eq('user_id', currentUser.id).order('sort_order');
   if(error){ console.error(error); return; }
   const { data: exs } = await sb.from('exercises').select('*').eq('user_id', currentUser.id).order('sort_order');
-  const todayStr = new Date().toISOString().slice(0,10);
+  const todayStr = localDateStr();
   const { data: sessionsToday } = await sb.from('sessions').select('day_id').eq('user_id', currentUser.id).eq('session_date', todayStr);
   const doneIds = new Set((sessionsToday||[]).map(s => s.day_id));
 
@@ -1216,7 +1224,7 @@ async function linkTodaySetLogsToSession(dayId, sessionId){
 }
 async function toggleSessionDone(dayId){
   const d = DAYS.find(x => x.id === dayId);
-  const todayStr = new Date().toISOString().slice(0,10);
+  const todayStr = localDateStr();
   if(d.doneToday){
     await sb.from('sessions').delete().eq('user_id', currentUser.id).eq('day_id', dayId).eq('session_date', todayStr);
   } else {
@@ -1592,7 +1600,7 @@ async function finishSessionMode(){
   if(!d) return;
   if(d.doneToday){ closeSessionMode(); return; }
   await autoSaveUnsavedSets(d.id);
-  const todayStr = new Date().toISOString().slice(0,10);
+  const todayStr = localDateStr();
   const { data: newSession, error } = await sb.from('sessions').insert({ user_id: currentUser.id, day_id: d.id, session_date: todayStr, day_type: d.day_type, completed: true }).select().single();
   if(error){ showToast('⚠️ ' + error.message); return; }
   if(newSession) await linkTodaySetLogsToSession(d.id, newSession.id);
@@ -1630,8 +1638,8 @@ async function renderCalendar(){
 
   const firstOfMonth = new Date(year, month, 1);
   const lastOfMonth = new Date(year, month + 1, 0);
-  const startStr = firstOfMonth.toISOString().slice(0,10);
-  const endStr = lastOfMonth.toISOString().slice(0,10);
+  const startStr = localDateStr(firstOfMonth);
+  const endStr = localDateStr(lastOfMonth);
 
   const { data: sessions } = await sb.from('sessions').select('*').eq('user_id', currentUser.id).gte('session_date', startStr).lte('session_date', endStr);
   calSessionsCache = {};
@@ -1642,7 +1650,7 @@ async function renderCalendar(){
 
   const startWeekday = (firstOfMonth.getDay() + 6) % 7; // lunes=0
   const daysInMonth = lastOfMonth.getDate();
-  const todayStr = new Date().toISOString().slice(0,10);
+  const todayStr = localDateStr();
 
   const headers = ['L','M','M','J','V','S','D'].map(h => `<div style="text-align:center;font-size:.62rem;color:var(--muted);">${h}</div>`).join('');
   let cellsHtml = '';
@@ -1696,7 +1704,7 @@ function showCalDay(dateStr){
     </div>`;
   });
   plannedPending.forEach(d => {
-    const isPast = dateStr < new Date().toISOString().slice(0,10);
+    const isPast = dateStr < localDateStr();
     html += `<div style="background:var(--card);border:1px ${isPast?'solid var(--danger)':'dashed var(--border)'};border-radius:10px;padding:10px 12px;margin-bottom:6px;display:flex;align-items:center;gap:10px;">
       <div style="flex:1;font-weight:700;font-size:.85rem;color:${isPast?'var(--danger)':'var(--muted)'};">${DAY_TYPE_ICON[d.day_type]} ${d.name} <span style="font-weight:400;">— ${isPast?'atrasado':'planificado'}</span></div>
       <button class="ex-btn-sm timer" style="flex:none;padding:6px 10px;" onclick="markPlannedDone('${d.id}','${dateStr}')">✅ Marcar hecho</button>
@@ -1726,7 +1734,7 @@ async function deleteSession(sessionId, dateStr){
 // ── SESIÓN PASADA (registrar entrenamientos hechos fuera de la app) ──
 let logPastMode = 'day', logPastType = 'gym';
 function openLogPast(){
-  const todayStr = new Date().toISOString().slice(0,10);
+  const todayStr = localDateStr();
   document.getElementById('logPastDate').value = todayStr;
   document.getElementById('logPastDate').max = todayStr;
   document.getElementById('logPastDaySelect').innerHTML = DAYS.map(d => `<option value="${d.id}">${DAY_TYPE_ICON[d.day_type]} ${d.name}</option>`).join('');
@@ -1779,7 +1787,7 @@ async function saveLogPast(){
 // SUPLEMENTOS
 // ═══════════════════════════════════════════
 let SUPPLEMENTS = [];
-let selectedHabitDate = new Date().toISOString().slice(0,10);
+let selectedHabitDate = localDateStr();
 let habitsCalMonth = new Date();
 habitsCalMonth.setDate(1);
 let habitLogsCache = {}; // dateStr -> { suppId -> logRow } (para el mes visible del calendario de hábitos)
@@ -1798,7 +1806,7 @@ function computeSuppStreak(supp, logByDate){
   let streak = 0;
   const d = new Date();
   for(let i=0; i<60; i++){
-    const dateStr = d.toISOString().slice(0,10);
+    const dateStr = localDateStr(d);
     if(isSuppDueOn(supp, d)){
       if(suppSuccess(supp, logByDate[dateStr])) streak++;
       else break;
@@ -1822,8 +1830,8 @@ async function renderHabitsCalendar(){
 
   const firstOfMonth = new Date(year, month, 1);
   const lastOfMonth = new Date(year, month + 1, 0);
-  const startStr = firstOfMonth.toISOString().slice(0,10);
-  const endStr = lastOfMonth.toISOString().slice(0,10);
+  const startStr = localDateStr(firstOfMonth);
+  const endStr = localDateStr(lastOfMonth);
 
   const { data: logs } = await sb.from('supplement_logs').select('*').eq('user_id', currentUser.id).gte('log_date', startStr).lte('log_date', endStr);
   habitLogsCache = {};
@@ -1834,7 +1842,7 @@ async function renderHabitsCalendar(){
 
   const startWeekday = (firstOfMonth.getDay() + 6) % 7;
   const daysInMonth = lastOfMonth.getDate();
-  const todayStr = new Date().toISOString().slice(0,10);
+  const todayStr = localDateStr();
   const headers = ['L','M','M','J','V','S','D'].map(h => `<div style="text-align:center;font-size:.6rem;color:var(--muted);">${h}</div>`).join('');
   let cells = '';
   for(let i=0; i<startWeekday; i++) cells += `<div></div>`;
@@ -1870,12 +1878,12 @@ async function selectHabitDate(dateStr){
   await renderSupplements();
 }
 async function resetHabitDateToToday(){
-  await selectHabitDate(new Date().toISOString().slice(0,10));
+  await selectHabitDate(localDateStr());
 }
 
 function daysSince(dateStr){
   if(!dateStr) return null;
-  const diff = Math.floor((new Date(new Date().toISOString().slice(0,10)) - new Date(dateStr)) / 86400000);
+  const diff = Math.floor((new Date(localDateStr()) - new Date(dateStr)) / 86400000);
   return diff;
 }
 
@@ -1885,8 +1893,8 @@ async function renderSupplements(){
     box.innerHTML = `<div class="empty-state"><div class="big">✅</div>Todavía no tienes hábitos agregados.</div>`;
     return;
   }
-  const todayStr = new Date().toISOString().slice(0,10);
-  const sixtyAgoStr = new Date(Date.now() - 60*86400000).toISOString().slice(0,10);
+  const todayStr = localDateStr();
+  const sixtyAgoStr = localDateStr(new Date(Date.now() - 60*86400000));
   const { data: logs } = await sb.from('supplement_logs').select('*').eq('user_id', currentUser.id).gte('log_date', sixtyAgoStr).lte('log_date', todayStr);
   const logMap = {}; // supp_id -> { dateStr -> logRow }
   (logs||[]).forEach(l => {
@@ -1982,7 +1990,7 @@ function openAddSupplement(){
   document.getElementById('suppUnit').value = '';
   document.getElementById('suppTarget').value = '';
   document.getElementById('suppStep').value = '';
-  document.getElementById('suppStartedOn').value = new Date().toISOString().slice(0,10);
+  document.getElementById('suppStartedOn').value = localDateStr();
   pickedSuppWeekdays = new Set();
   pickSuppType('check');
   pickSuppFreq('daily');
@@ -1999,7 +2007,7 @@ function openEditSupplement(id){
   document.getElementById('suppUnit').value = s.unit || '';
   document.getElementById('suppTarget').value = s.target_amount || '';
   document.getElementById('suppStep').value = s.step_amount || '';
-  document.getElementById('suppStartedOn').value = s.started_on || new Date().toISOString().slice(0,10);
+  document.getElementById('suppStartedOn').value = s.started_on || localDateStr();
   pickedSuppWeekdays = new Set(s.weekdays || []);
   pickSuppType(s.habit_type || 'check');
   pickSuppFreq(s.frequency_type || 'daily');
@@ -2031,7 +2039,7 @@ async function saveSupplement(){
   const name = document.getElementById('suppName').value.trim();
   if(!name) return;
   const dose = document.getElementById('suppDose').value.trim();
-  const startedOn = document.getElementById('suppStartedOn').value || new Date().toISOString().slice(0,10);
+  const startedOn = document.getElementById('suppStartedOn').value || localDateStr();
   const payload = {
     name, dose: dose || null,
     frequency_type: pickedSuppFreq,
@@ -2077,16 +2085,16 @@ async function renderInicio(){
   document.getElementById('inicioGreeting').textContent = `Hola, ${name}`;
 
   const today = new Date();
-  const todayStr = today.toISOString().slice(0,10);
+  const todayStr = localDateStr(today);
   const monday = new Date(today);
   monday.setDate(today.getDate() - ((today.getDay() + 6) % 7));
   const weekDates = [];
   for(let i=0; i<7; i++){ const d = new Date(monday); d.setDate(monday.getDate()+i); weekDates.push(d); }
-  const weekStartStr = weekDates[0].toISOString().slice(0,10);
-  const weekEndStr = weekDates[6].toISOString().slice(0,10);
+  const weekStartStr = localDateStr(weekDates[0]);
+  const weekEndStr = localDateStr(weekDates[6]);
 
-  const monthStart = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().slice(0,10);
-  const monthEnd = new Date(today.getFullYear(), today.getMonth()+1, 0).toISOString().slice(0,10);
+  const monthStart = localDateStr(new Date(today.getFullYear(), today.getMonth(), 1));
+  const monthEnd = localDateStr(new Date(today.getFullYear(), today.getMonth()+1, 0));
 
   const { data: monthSessions } = await sb.from('sessions').select('*').eq('user_id', currentUser.id).gte('session_date', monthStart).lte('session_date', monthEnd);
   const weekSessions = (monthSessions||[]).filter(s => s.session_date >= weekStartStr && s.session_date <= weekEndStr);
@@ -2094,7 +2102,7 @@ async function renderInicio(){
   // cuántos días distintos de la semana tienen algo planificado
   const plannedThisWeek = new Set();
   weekDates.forEach(d => {
-    DAYS.forEach(day => { if((day.weekdays||[]).includes(d.getDay())) plannedThisWeek.add(d.toISOString().slice(0,10)); });
+    DAYS.forEach(day => { if((day.weekdays||[]).includes(d.getDay())) plannedThisWeek.add(localDateStr(d)); });
   });
   const doneThisWeekDates = new Set(weekSessions.map(s => s.session_date));
   document.getElementById('inicioWeekStat').textContent = `${doneThisWeekDates.size}/${Math.max(plannedThisWeek.size, doneThisWeekDates.size)}`;
@@ -2105,7 +2113,7 @@ async function renderInicio(){
   weekSessions.forEach(s => { if(!sessByDate[s.session_date]) sessByDate[s.session_date]=[]; sessByDate[s.session_date].push(s); });
   const labels = ['L','M','M','J','V','S','D'];
   document.getElementById('inicioWeekStrip').innerHTML = weekDates.map((d,i) => {
-    const dateStr = d.toISOString().slice(0,10);
+    const dateStr = localDateStr(d);
     calSessionsCache[dateStr] = sessByDate[dateStr] || calSessionsCache[dateStr] || [];
     const daySessions = calSessionsCache[dateStr];
     const plannedDays = DAYS.filter(dd => (dd.weekdays||[]).includes(d.getDay()));
@@ -2150,7 +2158,7 @@ async function renderInicio(){
   if(!habits || !habits.length){
     habitsBox.innerHTML = '';
   } else {
-    const sixtyAgoStr = new Date(Date.now() - 60*86400000).toISOString().slice(0,10);
+    const sixtyAgoStr = localDateStr(new Date(Date.now() - 60*86400000));
     const { data: hLogs } = await sb.from('supplement_logs').select('*').eq('user_id', currentUser.id).gte('log_date', sixtyAgoStr).lte('log_date', todayStr);
     const hLogMap = {};
     (hLogs||[]).forEach(l => { if(!hLogMap[l.supplement_id]) hLogMap[l.supplement_id] = {}; hLogMap[l.supplement_id][l.log_date] = l; });
