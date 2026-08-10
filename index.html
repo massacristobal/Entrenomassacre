@@ -212,7 +212,6 @@
   <div class="tab-panel" id="panel-rutina">
     <div id="daysList"></div>
     <button class="add-btn" onclick="openAddDay()">＋ Agregar día</button>
-    <button class="add-btn" style="border-style:solid;border-color:var(--yellow);color:var(--yellow);margin-top:8px;" onclick="loadSuggestedRoutine()">⚡ Cargar rutina sugerida — fútbol A/B/C/D</button>
     <button class="add-btn" style="border-style:solid;border-color:var(--accent3);color:var(--accent3);margin-top:8px;" onclick="loadSuggestedRoutine2()">⚡ Cargar rutina sugerida — empuje/pierna/tirón/potencia</button>
   </div>
 
@@ -722,63 +721,6 @@ async function saveDaySheet(){
   await loadDays();
   showToast('✅ Día guardado');
 }
-// ── RUTINA SUGERIDA (plantilla precargada, fútbol + fuerza unilateral) ──
-const SUGGESTED_ROUTINE = [
-  { name:'Día A — Tren inferior unilateral', day_type:'gym', weekdays:[2],
-    warmups:[
-      {name:'Rotación de tobillos', reps:'10/lado', search:'ankle circles'},
-      {name:'Círculos de cadera', reps:'10/lado', search:'hip circles'},
-      {name:'Zancada con giro de tronco', reps:'8/lado', search:'lunge twist'},
-      {name:'Puente de glúteo — activación', reps:'12', search:'glute bridge'},
-    ],
-    exercises:[
-    {name:'Sentadilla búlgara', series:4, reps:'8/pierna', rest_sec:90, search:'bulgarian split squat'},
-    {name:'Peso muerto rumano a una pierna', series:4, reps:'8/pierna', rest_sec:90, search:'single leg romanian deadlift'},
-    {name:'Zancada lateral', series:3, reps:'10/pierna', rest_sec:60, search:'lateral lunge'},
-    {name:'Hip thrust a una pierna', series:3, reps:'12/pierna', rest_sec:60, search:'single leg hip thrust'},
-    {name:'Nordic curl (isquios)', series:3, reps:'6-8', rest_sec:90, search:'nordic hamstring curl'},
-    {name:'Pallof press (core anti-rotación)', series:3, reps:'10/lado', rest_sec:45, search:'pallof press'},
-  ]},
-  { name:'Día B — Tren superior + core', day_type:'gym', weekdays:[4],
-    warmups:[
-      {name:'Círculos de brazos', reps:'10/lado', search:'arm circles'},
-      {name:'Dislocaciones de hombro con banda/palo', reps:'10', search:'shoulder dislocate band'},
-      {name:'Remo con banda — activación', reps:'12', search:'band row'},
-      {name:'Plancha corta — activación', reps:'15 seg', search:'plank'},
-    ],
-    exercises:[
-    {name:'Press banca o militar', series:4, reps:'8', rest_sec:90, search:'barbell bench press'},
-    {name:'Remo a una mano', series:3, reps:'10/lado', rest_sec:60, search:'one arm dumbbell row'},
-    {name:'Dominadas o jalón', series:3, reps:'8', rest_sec:90, search:'pull up'},
-    {name:'Face pull', series:3, reps:'12', rest_sec:45, search:'face pull'},
-    {name:'Plancha + variantes', series:3, reps:'30-45 seg', rest_sec:45, search:'plank'},
-  ]},
-  { name:'Día C — Potencia y agilidad', day_type:'gym', weekdays:[6],
-    warmups:[
-      {name:'Elevación de rodillas caminando', reps:'10/lado', search:'high knees'},
-      {name:'Talón a glúteo caminando', reps:'10/lado', search:'butt kicks'},
-      {name:'Skipping bajo', reps:'20 seg', search:'high knees'},
-      {name:'Saltos verticales suaves', reps:'8', search:'jump squat'},
-      {name:'Carioca lateral', reps:'15 m/lado', search:'lateral shuffle'},
-    ],
-    exercises:[
-    {name:'Saltos a una pierna', series:4, reps:'5/pierna', rest_sec:90, search:'single leg box jump'},
-    {name:'Sentadilla a una pierna con salto suave', series:3, reps:'6/pierna', rest_sec:90, search:'jump squat'},
-    {name:'Sprint corto con cambio de dirección', series:6, reps:'15-20 m', rest_sec:60, search:null},
-    {name:'Escalera de agilidad', series:3, reps:'20 seg', rest_sec:45, search:null},
-    {name:'Russian twist con peso', series:3, reps:'15', rest_sec:45, search:'russian twist'},
-  ]},
-  { name:'Día D — Prevención (ingle / isquios)', day_type:'gym', weekdays:[],
-    warmups:[
-      {name:'Movilidad de cadera 90/90', reps:'8/lado', search:'hip 90 90 stretch'},
-      {name:'Apertura y cierre de cadera (worlds greatest stretch)', reps:'6/lado', search:'world greatest stretch'},
-    ],
-    exercises:[
-    {name:'Copenhagen plank', series:3, reps:'20-30 seg/lado', rest_sec:45, search:'copenhagen plank'},
-    {name:'Nordic curl progresivo', series:3, reps:'6-8', rest_sec:60, search:'nordic hamstring curl'},
-    {name:'Movilidad de cadera 90/90', series:2, reps:'8/lado', rest_sec:30, search:'hip 90 90 stretch'},
-  ]},
-];
 const SUGGESTED_ROUTINE_2 = [
   { name:'Día 1 — Empuje unilateral + core', day_type:'gym', weekdays:[1],
     warmups:[
@@ -879,37 +821,6 @@ function findExDbMatch(searchTerms){
     if(score > bestScore){ bestScore = score; best = item; }
   }
   return bestScore >= Math.max(1, Math.ceil(q.length * 0.6)) ? best : null;
-}
-async function loadSuggestedRoutine(){
-  if(!confirm('Esto va a crear 4 días nuevos con ejercicios precargados (no borra lo que ya tienes). ¿Continuar?')) return;
-  await loadExDb(); // para intentar traer gifs reales de la base de datos
-  for(const dayDef of SUGGESTED_ROUTINE){
-    const sort_order = DAYS.length ? Math.max(...DAYS.map(d=>d.sort_order))+1 : 0;
-    const { data: newDay, error } = await sb.from('days').insert({ user_id: currentUser.id, name: dayDef.name, day_type: dayDef.day_type, weekdays: dayDef.weekdays, sort_order }).select().single();
-    if(error || !newDay) continue;
-    let i = 0;
-    for(const w of (dayDef.warmups || [])){
-      const match = findExDbMatch(w.search);
-      await sb.from('exercises').insert({
-        day_id: newDay.id, user_id: currentUser.id, name: w.name, series:1, reps: w.reps, rest_sec:0, category:'warmup', tempo:'Controlado',
-        cues: match ? ((match.steps_es && match.steps_es.length) ? match.steps_es : [match.instructions_es]) : [],
-        img: match ? match.image : null, gif: match ? match.gif_url : null,
-        sort_order: i++
-      });
-    }
-    for(const ex of dayDef.exercises){
-      const match = findExDbMatch(ex.search);
-      await sb.from('exercises').insert({
-        day_id: newDay.id, user_id: currentUser.id, name: ex.name, series: ex.series, reps: ex.reps, rest_sec: ex.rest_sec, category:'strength', tempo:'Controlado',
-        cues: match ? ((match.steps_es && match.steps_es.length) ? match.steps_es : [match.instructions_es]) : [],
-        img: match ? match.image : null, gif: match ? match.gif_url : null,
-        sort_order: i++
-      });
-    }
-    DAYS.push({ ...newDay, exercises: [], doneToday: false });
-  }
-  await loadDays();
-  showToast('✅ Rutina cargada — 4 días nuevos');
 }
 async function deleteDay(id){
   if(!confirm('¿Eliminar este día y todos sus ejercicios?')) return;
