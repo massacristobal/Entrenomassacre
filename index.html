@@ -213,6 +213,7 @@
     <div id="daysList"></div>
     <button class="add-btn" onclick="openAddDay()">＋ Agregar día</button>
     <button class="add-btn" style="border-style:solid;border-color:var(--accent3);color:var(--accent3);margin-top:8px;" onclick="loadSuggestedRoutine2()">⚡ Cargar rutina sugerida — empuje/pierna/tirón/potencia</button>
+    <button class="add-btn" style="border-style:solid;border-color:#a855f7;color:#a855f7;margin-top:8px;" onclick="openGenRoutine()">🎯 Generar mi rutina (responde 3 preguntas)</button>
   </div>
 
   <!-- TAB: PROGRESO -->
@@ -315,6 +316,34 @@
     </div>
     <textarea id="logPastNotes" placeholder="Notas (opcional)" style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:10px;font-size:.82rem;margin-bottom:8px;min-height:50px;font-family:inherit;"></textarea>
     <button class="sheet-btn" onclick="saveLogPast()">Guardar</button>
+  </div>
+</div>
+
+<!-- GENERADOR DE RUTINA POR PREGUNTAS -->
+<div class="sheet-overlay" id="genRoutineOverlay" onclick="if(event.target===this)closeGenRoutine()">
+  <div class="sheet">
+    <div class="sheet-head"><h3>🎯 Generar mi rutina</h3><button class="icon-btn" onclick="closeGenRoutine()">✕</button></div>
+    <div style="font-size:.72rem;color:var(--muted);margin-bottom:6px;">Objetivo</div>
+    <div class="type-pick" id="genObjetivoPick">
+      <button data-val="fuerza" onclick="pickGen('objetivo','fuerza')">💪 Fuerza</button>
+      <button data-val="hipertrofia" onclick="pickGen('objetivo','hipertrofia')">📈 Hipertrofia</button>
+      <button data-val="futbol" onclick="pickGen('objetivo','futbol')">⚽ Fútbol</button>
+      <button data-val="perdida_grasa" onclick="pickGen('objetivo','perdida_grasa')">🔥 Pérdida de grasa</button>
+    </div>
+    <div style="font-size:.72rem;color:var(--muted);margin:10px 0 6px;">Días disponibles por semana</div>
+    <div class="type-pick" id="genDiasPick">
+      <button data-val="2" onclick="pickGen('dias','2')">2</button>
+      <button data-val="3" onclick="pickGen('dias','3')">3</button>
+      <button data-val="4" onclick="pickGen('dias','4')">4</button>
+      <button data-val="5" onclick="pickGen('dias','5')">5+</button>
+    </div>
+    <div style="font-size:.72rem;color:var(--muted);margin:10px 0 6px;">Equipamiento</div>
+    <div class="type-pick" id="genEquipoPick">
+      <button data-val="gym" onclick="pickGen('equipo','gym')">🏋️ Gym completo</button>
+      <button data-val="casa" onclick="pickGen('equipo','casa')">🏠 Casa</button>
+      <button data-val="sin_equipo" onclick="pickGen('equipo','sin_equipo')">🤸 Sin equipo</button>
+    </div>
+    <button class="sheet-btn" style="margin-top:14px;" onclick="runRoutineGenerator()">Generar mi rutina</button>
   </div>
 </div>
 
@@ -779,6 +808,179 @@ const SUGGESTED_ROUTINE_2 = [
       {name:'Bici o elíptica — intervalos 20s fuerte / 40s suave × 8', series:1, reps:'15-20 min', rest_sec:0, search:null},
     ]},
 ];
+// ═══════════════════════════════════════════
+// GENERADOR DE RUTINA POR PREGUNTAS (basado en reglas)
+// ═══════════════════════════════════════════
+const EXERCISE_POOLS = {
+  gym: {
+    legs: [
+      {name:'Sentadilla con barra', uni:false, search:'barbell squat'},
+      {name:'Peso muerto rumano', uni:false, search:'romanian deadlift'},
+      {name:'Zancada con barra', uni:true, search:'barbell lunge'},
+      {name:'Prensa de piernas', uni:false, search:'leg press'},
+      {name:'Curl femoral en máquina', uni:false, search:'leg curl machine'},
+      {name:'Sentadilla búlgara con mancuernas', uni:true, search:'bulgarian split squat'},
+    ],
+    push: [
+      {name:'Press banca con barra', uni:false, search:'barbell bench press'},
+      {name:'Press militar con barra', uni:false, search:'barbell overhead press'},
+      {name:'Fondos en paralelas', uni:false, search:'tricep dip'},
+      {name:'Press inclinado con mancuernas', uni:false, search:'incline dumbbell press'},
+    ],
+    pull: [
+      {name:'Dominadas', uni:false, search:'pull up'},
+      {name:'Remo con barra', uni:false, search:'barbell row'},
+      {name:'Jalón al pecho', uni:false, search:'lat pulldown'},
+      {name:'Remo a una mano con mancuerna', uni:true, search:'one arm dumbbell row'},
+    ],
+    core: [
+      {name:'Plancha', uni:false, search:'plank'},
+      {name:'Rueda abdominal', uni:false, search:'ab wheel'},
+      {name:'Elevación de piernas colgado', uni:false, search:'hanging leg raise'},
+    ],
+  },
+  casa: {
+    legs: [
+      {name:'Sentadilla búlgara', uni:true, search:'bulgarian split squat'},
+      {name:'Peso muerto rumano a una pierna', uni:true, search:'single leg romanian deadlift'},
+      {name:'Zancada caminando con mancuernas', uni:true, search:'walking lunge'},
+      {name:'Puente de glúteo', uni:false, search:'glute bridge'},
+    ],
+    push: [
+      {name:'Press de pecho con mancuernas', uni:false, search:'dumbbell bench press'},
+      {name:'Press de hombro con mancuernas', uni:false, search:'dumbbell shoulder press'},
+      {name:'Fondos en banco', uni:false, search:'bench dip'},
+    ],
+    pull: [
+      {name:'Remo a una mano con mancuerna', uni:true, search:'one arm dumbbell row'},
+      {name:'Jalón con banda', uni:false, search:'band pulldown'},
+      {name:'Remo con banda', uni:false, search:'band row'},
+    ],
+    core: [
+      {name:'Plancha', uni:false, search:'plank'},
+      {name:'Russian twist con mancuerna', uni:false, search:'russian twist'},
+      {name:'Dead bug', uni:false, search:'dead bug'},
+    ],
+  },
+  sin_equipo: {
+    legs: [
+      {name:'Sentadilla con salto', uni:false, search:'jump squat'},
+      {name:'Zancada búlgara con silla', uni:true, search:'bulgarian split squat'},
+      {name:'Puente de glúteo a una pierna', uni:true, search:'single leg glute bridge'},
+      {name:'Sentadilla a una pierna asistida', uni:true, search:'pistol squat'},
+    ],
+    push: [
+      {name:'Flexiones', uni:false, search:'push up'},
+      {name:'Fondos en silla', uni:false, search:'bench dip'},
+      {name:'Flexiones pica (hombro)', uni:false, search:'pike push up'},
+    ],
+    pull: [
+      {name:'Remo invertido (mesa o barra baja)', uni:false, search:'inverted row'},
+      {name:'Superman', uni:false, search:'superman exercise'},
+    ],
+    core: [
+      {name:'Plancha', uni:false, search:'plank'},
+      {name:'Escalador', uni:false, search:'mountain climber'},
+      {name:'Bicicleta abdominal', uni:false, search:'bicycle crunch'},
+    ],
+  },
+};
+const OBJETIVO_LABEL = { fuerza:'Fuerza', hipertrofia:'Hipertrofia', futbol:'Fútbol', perdida_grasa:'Pérdida de grasa' };
+const OBJETIVO_PARAMS = {
+  fuerza: { series:5, reps:5, rest:120, preferUnilateral:false, cardio:false },
+  hipertrofia: { series:4, reps:10, rest:75, preferUnilateral:false, cardio:false },
+  futbol: { series:4, reps:8, rest:75, preferUnilateral:true, cardio:false },
+  perdida_grasa: { series:3, reps:15, rest:40, preferUnilateral:false, cardio:true },
+};
+const SPLIT_TEMPLATES = {
+  2: [ {name:'Full Body A', groups:['legs','push','pull','core']}, {name:'Full Body B', groups:['legs','pull','push','core']} ],
+  3: [ {name:'Empuje (Push)', groups:['push','core']}, {name:'Tirón (Pull)', groups:['pull','core']}, {name:'Piernas', groups:['legs','core']} ],
+  4: [ {name:'Tren superior A', groups:['push','pull']}, {name:'Tren inferior A', groups:['legs','core']}, {name:'Tren superior B', groups:['push','pull']}, {name:'Tren inferior B', groups:['legs','core']} ],
+  5: [ {name:'Empuje', groups:['push']}, {name:'Tirón', groups:['pull']}, {name:'Piernas', groups:['legs']}, {name:'Tren superior', groups:['push','pull']}, {name:'Piernas + core', groups:['legs','core']} ],
+};
+const SPLIT_WEEKDAYS = { 2:[1,4], 3:[1,3,5], 4:[1,2,4,5], 5:[1,2,3,4,5] };
+
+function buildGeneratedRoutine(objetivo, dias, equipo){
+  const pool = EXERCISE_POOLS[equipo];
+  const params = OBJETIVO_PARAMS[objetivo];
+  const template = SPLIT_TEMPLATES[dias] || SPLIT_TEMPLATES[3];
+  const weekdays = SPLIT_WEEKDAYS[dias] || SPLIT_WEEKDAYS[3];
+  const groupCounters = {};
+  return template.map((dayTpl, idx) => {
+    const exercises = [];
+    dayTpl.groups.forEach(group => {
+      let list = pool[group] || [];
+      if(params.preferUnilateral){
+        const uniOnly = list.filter(e => e.uni);
+        if(uniOnly.length >= 2) list = uniOnly;
+      }
+      if(!list.length) return;
+      const count = group === 'core' ? 1 : 2;
+      for(let k=0; k<count; k++){
+        if(!groupCounters[group]) groupCounters[group] = 0;
+        const ex = list[groupCounters[group] % list.length];
+        groupCounters[group]++;
+        const reps = ex.uni ? `${params.reps}/lado` : `${params.reps}`;
+        exercises.push({ name: ex.name, series: params.series, reps, rest_sec: params.rest, search: ex.search });
+      }
+    });
+    if(params.cardio){
+      exercises.push({ name:'Cardio final (bici/trote/salto cuerda)', series:1, reps:'15-20 min, intervalos suaves', rest_sec:0, search:null });
+    }
+    return {
+      name: `${dayTpl.name} — ${OBJETIVO_LABEL[objetivo]}`,
+      weekdays: [weekdays[idx]],
+      warmups: WARMUP_TEMPLATES.slice(0,4).map(w => ({ name:w.name, reps:w.reps, search:null })),
+      exercises
+    };
+  });
+}
+
+let genAnswers = { objetivo:null, dias:null, equipo:null };
+function openGenRoutine(){
+  genAnswers = { objetivo:null, dias:null, equipo:null };
+  document.querySelectorAll('#genObjetivoPick button,#genDiasPick button,#genEquipoPick button').forEach(b => b.classList.remove('active'));
+  document.getElementById('genRoutineOverlay').classList.add('show');
+}
+function closeGenRoutine(){ document.getElementById('genRoutineOverlay').classList.remove('show'); }
+function pickGen(key, val){
+  genAnswers[key] = val;
+  const pickId = 'gen' + key.charAt(0).toUpperCase() + key.slice(1) + 'Pick';
+  document.querySelectorAll(`#${pickId} button`).forEach(b => b.classList.toggle('active', b.dataset.val === val));
+}
+async function runRoutineGenerator(){
+  const { objetivo, dias, equipo } = genAnswers;
+  if(!objetivo || !dias || !equipo){ showToast('⚠️ Responde las 3 preguntas'); return; }
+  if(!confirm('Esto va a crear días nuevos según tus respuestas (no borra lo que ya tienes). ¿Continuar?')) return;
+  await loadExDb();
+  const dayDefs = buildGeneratedRoutine(objetivo, parseInt(dias), equipo);
+  for(const dayDef of dayDefs){
+    const sort_order = DAYS.length ? Math.max(...DAYS.map(d=>d.sort_order))+1 : 0;
+    const { data: newDay, error } = await sb.from('days').insert({ user_id: currentUser.id, name: dayDef.name, day_type:'gym', weekdays: dayDef.weekdays, sort_order }).select().single();
+    if(error || !newDay) continue;
+    let i = 0;
+    for(const w of dayDef.warmups){
+      const match = findExDbMatch(w.search);
+      await sb.from('exercises').insert({
+        day_id: newDay.id, user_id: currentUser.id, name: w.name, series:1, reps: w.reps, rest_sec:0, category:'warmup', tempo:'Controlado',
+        cues: match ? ((match.steps_es && match.steps_es.length) ? match.steps_es : [match.instructions_es]) : [],
+        img: match ? match.image : null, gif: match ? match.gif_url : null, sort_order: i++
+      });
+    }
+    for(const ex of dayDef.exercises){
+      const match = findExDbMatch(ex.search);
+      await sb.from('exercises').insert({
+        day_id: newDay.id, user_id: currentUser.id, name: ex.name, series: ex.series, reps: ex.reps, rest_sec: ex.rest_sec, category:'strength', tempo:'Controlado',
+        cues: match ? ((match.steps_es && match.steps_es.length) ? match.steps_es : [match.instructions_es]) : [],
+        img: match ? match.image : null, gif: match ? match.gif_url : null, sort_order: i++
+      });
+    }
+    DAYS.push({ ...newDay, exercises: [], doneToday: false });
+  }
+  closeGenRoutine();
+  await loadDays();
+  showToast(`✅ Rutina generada — ${dayDefs.length} días nuevos`);
+}
 async function loadSuggestedRoutine2(){
   if(!confirm('Esto va a crear 4 días nuevos con ejercicios precargados (no borra lo que ya tienes). ¿Continuar?')) return;
   await loadExDb();
@@ -885,6 +1087,17 @@ async function fetchTodaySetLogs(exerciseIds){
   });
   return map;
 }
+async function fetchLastSetLogs(exerciseIds){
+  if(!exerciseIds.length) return {};
+  const { startISO } = todayRangeISO();
+  const { data } = await sb.from('set_logs').select('*').in('exercise_id', exerciseIds).lt('logged_at', startISO).order('logged_at', { ascending:false }).limit(500);
+  const map = {}; // exId -> { serieNum -> logRow más reciente ANTES de hoy }
+  (data||[]).forEach(l => {
+    if(!map[l.exercise_id]) map[l.exercise_id] = {};
+    if(!(l.serie_number in map[l.exercise_id])) map[l.exercise_id][l.serie_number] = l;
+  });
+  return map;
+}
 async function renderExercisesForDay(dayId){
   const d = DAYS.find(x => x.id === dayId);
   const box = document.getElementById('exlist-' + dayId);
@@ -901,9 +1114,10 @@ async function renderExercisesForDay(dayId){
     html += group.map((ex,i) => renderExerciseCard(ex, dayId, i===0, i===group.length-1)).join('');
   });
   box.innerHTML = html;
-  const logsMap = await fetchTodaySetLogs(d.exercises.map(e => e.id));
+  const exIds = d.exercises.map(e => e.id);
+  const [logsMap, lastMap] = await Promise.all([fetchTodaySetLogs(exIds), fetchLastSetLogs(exIds)]);
   d.exercises.forEach(ex => {
-    renderSetRows(ex.id, logsMap[ex.id] || {});
+    renderSetRows(ex.id, logsMap[ex.id] || {}, lastMap[ex.id] || {});
     updateExerciseCompletionBadge(ex.id);
   });
 }
@@ -914,17 +1128,19 @@ function findExercise(exId){
   for(const d of DAYS){ const ex = d.exercises.find(e => e.id === exId); if(ex) return ex; }
   return null;
 }
-function renderSetRows(exId, presetLogs){
+function renderSetRows(exId, presetLogs, suggestedLogs){
   presetLogs = presetLogs || {};
+  suggestedLogs = suggestedLogs || {};
   const ex = findExercise(exId);
   const box = document.getElementById('sets-' + exId);
   if(!box) return;
   let html = '';
   for(let i=1; i<=ex.series; i++){
     const log = presetLogs[i];
+    const suggestion = suggestedLogs[i];
     const savedClass = log ? ' saved' : '';
-    const wVal = (log && log.weight != null) ? log.weight : '';
-    const rVal = (log && log.reps != null) ? log.reps : '';
+    const wVal = (log && log.weight != null) ? log.weight : ((suggestion && suggestion.weight != null) ? suggestion.weight : '');
+    const rVal = (log && log.reps != null) ? log.reps : ((suggestion && suggestion.reps != null) ? suggestion.reps : '');
     html += `
       <div class="set-row">
         <div class="set-num">${i}</div>
@@ -1435,9 +1651,10 @@ async function openSessionMode(dayId){
       html += group.map(ex => renderExerciseCardSession(ex)).join('');
     });
     box.innerHTML = html;
-    const logsMap = await fetchTodaySetLogs(d.exercises.map(e => e.id));
+    const exIds = d.exercises.map(e => e.id);
+    const [logsMap, lastMap] = await Promise.all([fetchTodaySetLogs(exIds), fetchLastSetLogs(exIds)]);
     d.exercises.forEach(ex => {
-      renderSetRowsSession(ex.id, logsMap[ex.id] || {});
+      renderSetRowsSession(ex.id, logsMap[ex.id] || {}, lastMap[ex.id] || {});
       updateExerciseCompletionBadge(ex.id);
     });
   }
@@ -1470,17 +1687,19 @@ function renderExerciseCardSession(ex){
 function toggleExDetailSession(exId){
   document.getElementById('sm-exdetail-' + exId).classList.toggle('open');
 }
-function renderSetRowsSession(exId, presetLogs){
+function renderSetRowsSession(exId, presetLogs, suggestedLogs){
   presetLogs = presetLogs || {};
+  suggestedLogs = suggestedLogs || {};
   const ex = findExercise(exId);
   const box = document.getElementById('sm-sets-' + exId);
   if(!box) return;
   let html = '';
   for(let i=1; i<=ex.series; i++){
     const log = presetLogs[i];
+    const suggestion = suggestedLogs[i];
     const savedClass = log ? ' saved' : '';
-    const wVal = (log && log.weight != null) ? log.weight : '';
-    const rVal = (log && log.reps != null) ? log.reps : '';
+    const wVal = (log && log.weight != null) ? log.weight : ((suggestion && suggestion.weight != null) ? suggestion.weight : '');
+    const rVal = (log && log.reps != null) ? log.reps : ((suggestion && suggestion.reps != null) ? suggestion.reps : '');
     html += `
       <div class="set-row">
         <div class="set-num">${i}</div>
