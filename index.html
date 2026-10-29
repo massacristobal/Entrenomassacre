@@ -157,6 +157,7 @@
   .mob-pose-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);}
   .mob-thumb{width:36px;height:36px;border-radius:8px;background:var(--surface);display:flex;align-items:center;justify-content:center;font-size:1rem;flex-shrink:0;overflow:hidden;opacity:.9;}
   .mob-thumb img{width:100%;height:100%;object-fit:cover;background:#fff;}
+  .mob-test-row{display:flex;align-items:center;gap:10px;padding:9px 0;border-top:1px solid var(--border);cursor:pointer;}
   .mob-pose-num{width:22px;text-align:center;font-family:'Bebas Neue',sans-serif;font-size:1.1rem;color:var(--muted);flex-shrink:0;}
   #mobPlayerOverlay{display:none;position:fixed;top:0;bottom:0;left:0;right:0;margin:0 auto;width:100%;max-width:480px;z-index:999;background:var(--bg);flex-direction:column;padding:16px 20px 24px;overflow-y:auto;}
   #mobPlayerOverlay.show{display:flex;}
@@ -251,6 +252,8 @@
     <div id="mobTodayDone" class="hidden" style="background:rgba(61,220,151,.1);border:1px solid var(--green);color:var(--green);border-radius:10px;padding:10px 12px;font-size:.82rem;font-weight:700;margin-bottom:14px;">✅ Ya hiciste movilidad hoy</div>
     <div style="font-size:.72rem;color:var(--muted);letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;">Rutinas guiadas</div>
     <div id="mobilityList"></div>
+    <div style="font-size:.72rem;color:var(--muted);letter-spacing:1px;text-transform:uppercase;margin:18px 0 8px;">Medir mi avance</div>
+    <div id="mobTestsBox"></div>
   </div>
 
   <!-- TAB: PROGRESO -->
@@ -502,6 +505,26 @@
     <div id="mobSheetMeta" style="font-size:.78rem;color:var(--muted);margin-bottom:8px;line-height:1.4;"></div>
     <div id="mobSheetList" style="margin-bottom:16px;"></div>
     <button class="sheet-btn" style="padding:13px;font-size:.9rem;" onclick="startMobilityRoutine()">▶ Empezar rutina</button>
+  </div>
+</div>
+
+<!-- MOVILIDAD: ASISTENTE DE TESTS -->
+<div class="sheet-overlay" id="mobTestOverlay">
+  <div class="sheet">
+    <div class="sheet-head"><h3>📏 Tests de movilidad</h3><button class="icon-btn" onclick="closeMobTestWizard()">✕</button></div>
+    <div id="mobTestBody"></div>
+  </div>
+</div>
+
+<!-- MOVILIDAD: HISTORIAL DE UN TEST -->
+<div class="sheet-overlay" id="mobTestHistOverlay" onclick="if(event.target===this)closeMobTestHistory()">
+  <div class="sheet">
+    <div class="sheet-head"><h3 id="mobTestHistTitle"></h3><button class="icon-btn" onclick="closeMobTestHistory()">✕</button></div>
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:12px;margin-bottom:10px;">
+      <canvas id="mobTestCanvas" height="170"></canvas>
+    </div>
+    <div id="mobTestHistHint" style="font-size:.74rem;color:var(--muted);margin-bottom:10px;"></div>
+    <table style="width:100%;border-collapse:collapse;font-size:.8rem;"><tbody id="mobTestHistTable"></tbody></table>
   </div>
 </div>
 
@@ -1946,6 +1969,7 @@ function mobilityTotalSec(routine){
 function mobilityMinutes(routine){ return Math.max(1, Math.round(mobilityTotalSec(routine) / 60)); }
 
 async function renderMobility(){
+  renderMobilityTests();
   const list = document.getElementById('mobilityList');
   list.innerHTML = MOBILITY_ROUTINES.map(r => `
     <div class="mob-card" style="border-left-color:${r.color};" onclick="openMobilityRoutine('${r.id}')">
@@ -2002,6 +2026,236 @@ async function openMobilityRoutine(id){
   });
 }
 function closeMobilitySheet(){ document.getElementById('mobSheetOverlay').classList.remove('show'); }
+
+// ── TESTS DE MOVILIDAD (una vez al mes, para medir avance) ──
+// type: 'cm' / 'sec' se ingresan con número; 'scale' con botones (0=no, 1=casi, 2=sí)
+const MOB_TESTS = [
+  { key:'knee_wall', icon:'🦶', name:'Rodilla a la pared', area:'Tobillo', type:'cm', sides:true, good:10,
+    how:'Descalzo, frente a una pared. Pon el pie a cierta distancia y lleva la rodilla a tocar la pared sin levantar el talón. Aleja el pie de a poco hasta la distancia máxima en que todavía tocas. Mide en cm desde el dedo gordo a la pared.',
+    hint:'10 cm o más es bueno. Más de 3 cm de diferencia entre lados vale la pena trabajarla.' },
+  { key:'sit_reach', icon:'📏', name:'Sentarse y alcanzar', area:'Isquios y espalda baja', type:'cm', sides:false, good:0, allowNegative:true,
+    how:'Sentado en el suelo con las piernas estiradas y juntas, plantas contra una pared o caja. Estira los brazos hacia adelante, despacio y sin rebotar. Mide cuántos cm pasas la punta de los pies (positivo) o cuántos te faltan (negativo).',
+    hint:'Tocar la punta de los pies (0 cm) o pasarla es bueno.' },
+  { key:'deep_squat', icon:'🏋️', name:'Sentadilla profunda', area:'Cadera y tobillo', type:'sec', sides:false, good:60,
+    how:'Pies al ancho de hombros, baja lo más profundo que puedas con los talones en el suelo y el pecho alto. Cuenta cuántos segundos aguantas abajo sin levantar los talones (máximo 120).',
+    hint:'Aguantar 60 segundos cómodo es bueno.' },
+  { key:'shoulder_wall', icon:'🙆', name:'Brazos arriba en la pared', area:'Hombros', type:'scale', sides:false, good:2,
+    how:'Espalda, glúteos y cabeza pegados a la pared, pies a un palmo. Con los brazos estirados y los pulgares hacia atrás, súbelos por delante hasta arriba. ¿Tocas la pared con los pulgares sin arquear la espalda baja?',
+    hint:'"Sí" es el objetivo. "Casi" es a menos de un palmo.' },
+  { key:'hip_9090', icon:'🦵', name:'90/90 de cadera', area:'Rotación de cadera', type:'scale', sides:true, good:2,
+    how:'Siéntate con una pierna doblada a 90° adelante y la otra a 90° al lado. Intenta sentarte derecho, con el pecho alto y sin apoyar las manos, y sostenlo 10 segundos. El lado es el de la pierna que está adelante.',
+    hint:'"Sí" en ambos lados es el objetivo.' },
+];
+const SCALE_LABEL = { 0:'No', 1:'Casi', 2:'Sí' };
+const SIDE_LABEL = { left:'Izq', right:'Der' };
+const MOB_TEST_EVERY_DAYS = 30;
+let MOB_TEST_ROWS = null; // filas de mobility_tests del usuario; null = tabla no disponible
+let mobTestsTableMissing = false;
+
+function fmtTestValue(test, v){
+  if(v == null) return '—';
+  if(test.type === 'scale') return SCALE_LABEL[v] ?? v;
+  return test.type === 'cm' ? `${v} cm` : `${v} s`;
+}
+// historial de un test agrupado por fecha: [{date, left, right, value}]
+function testHistory(key){
+  const byDate = {};
+  (MOB_TEST_ROWS||[]).filter(r => r.test_key === key).forEach(r => {
+    if(!byDate[r.test_date]) byDate[r.test_date] = { date: r.test_date };
+    byDate[r.test_date][r.side || 'value'] = Number(r.value);
+  });
+  return Object.values(byDate).sort((a,b) => a.date.localeCompare(b.date));
+}
+function testDiffBadge(test, prev, last, field){
+  if(!prev || prev[field] == null || last[field] == null) return '';
+  const d = Math.round((last[field] - prev[field]) * 10) / 10;
+  if(d === 0) return `<span style="color:var(--muted);">=</span>`;
+  const color = d > 0 ? 'var(--green)' : 'var(--danger)';
+  const txt = test.type === 'scale' ? (d > 0 ? '↑' : '↓') : `${d > 0 ? '↑' : '↓'}${Math.abs(d)}`;
+  return `<span style="color:${color};font-weight:700;">${txt}</span>`;
+}
+
+async function loadMobilityTests(){
+  const { data, error } = await sb.from('mobility_tests').select('*').eq('user_id', currentUser.id).order('test_date');
+  mobTestsTableMissing = !!error;
+  if(error) console.error(error);
+  MOB_TEST_ROWS = error ? null : (data || []);
+}
+async function renderMobilityTests(){
+  const box = document.getElementById('mobTestsBox');
+  await loadMobilityTests();
+  if(mobTestsTableMissing){
+    box.innerHTML = `<div class="day-card" style="padding:14px;font-size:.8rem;color:var(--muted);line-height:1.5;">📏 <b style="color:var(--text);">Tests de movilidad</b><br>Todavía no están activados en la base de datos.</div>`;
+    return;
+  }
+  const dates = [...new Set(MOB_TEST_ROWS.map(r => r.test_date))].sort();
+  const lastDate = dates[dates.length - 1];
+  let statusLine = 'Mide tu movilidad una vez al mes para ver cómo avanzas.';
+  let due = true;
+  if(lastDate){
+    const daysAgo = Math.floor((new Date(localDateStr() + 'T00:00:00') - new Date(lastDate + 'T00:00:00')) / 86400000);
+    due = daysAgo >= MOB_TEST_EVERY_DAYS;
+    statusLine = due ? `Último test hace ${daysAgo} días — ¡toca repetirlo!` : `Último test hace ${daysAgo} día${daysAgo===1?'':'s'} · el próximo en ${MOB_TEST_EVERY_DAYS - daysAgo} días`;
+  }
+  const rows = lastDate ? MOB_TESTS.map(t => {
+    const hist = testHistory(t.key);
+    if(!hist.length) return '';
+    const last = hist[hist.length - 1], prev = hist[hist.length - 2];
+    const vals = t.sides
+      ? ['left','right'].map(sd => `${SIDE_LABEL[sd]} ${fmtTestValue(t, last[sd])} ${testDiffBadge(t, prev, last, sd)}`).join(' · ')
+      : `${fmtTestValue(t, last.value)} ${testDiffBadge(t, prev, last, 'value')}`;
+    return `<div class="mob-test-row" onclick="openMobTestHistory('${t.key}')">
+      <span style="font-size:1.1rem;width:26px;text-align:center;">${t.icon}</span>
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:.84rem;font-weight:600;">${t.name}</div>
+        <div style="font-size:.74rem;color:var(--muted);">${vals}</div>
+      </div>
+      <span style="color:var(--muted);">›</span>
+    </div>`;
+  }).join('') : '';
+  box.innerHTML = `<div class="day-card" style="padding:14px;">
+    <div style="display:flex;align-items:center;gap:10px;">
+      <div style="font-size:1.5rem;">📏</div>
+      <div style="flex:1;">
+        <div style="font-weight:700;font-size:.95rem;">Tests de movilidad</div>
+        <div style="font-size:.74rem;color:${due && lastDate ? 'var(--yellow)' : 'var(--muted)'};margin-top:2px;">${statusLine}</div>
+      </div>
+    </div>
+    ${rows ? `<div style="margin-top:10px;">${rows}</div>` : ''}
+    <button class="sheet-btn" style="margin-top:12px;${due ? '' : 'background:var(--surface);color:var(--text);border:1px solid var(--border);'}" onclick="openMobTestWizard()">${lastDate ? '📏 Hacer tests de nuevo' : '📏 Hacer mi primer test'}</button>
+  </div>`;
+}
+
+// ── ASISTENTE ──
+let mobTestWiz = null; // { idx, answers: { key: { left, right, value } } }
+function openMobTestWizard(){
+  mobTestWiz = { idx:0, answers:{} };
+  renderMobTestStep();
+  document.getElementById('mobTestOverlay').classList.add('show');
+}
+function closeMobTestWizard(){ document.getElementById('mobTestOverlay').classList.remove('show'); mobTestWiz = null; }
+function renderMobTestStep(){
+  const t = MOB_TESTS[mobTestWiz.idx];
+  const ans = mobTestWiz.answers[t.key] || {};
+  const prevHist = testHistory(t.key);
+  const prev = prevHist[prevHist.length - 1];
+  const fields = t.sides ? [['left','Lado izquierdo'],['right','Lado derecho']] : [['value', null]];
+  const inputs = fields.map(([f, label]) => {
+    const prevTxt = prev && prev[f] != null ? `<span style="font-size:.7rem;color:var(--muted);">Anterior: ${fmtTestValue(t, prev[f])}</span>` : '';
+    if(t.type === 'scale'){
+      return `<div style="margin-bottom:12px;">
+        ${label ? `<div style="font-size:.78rem;font-weight:700;margin-bottom:6px;">${label}</div>` : ''}
+        <div class="type-pick" style="margin-bottom:4px;">
+          ${[2,1,0].map(v => `<button class="${ans[f]===v?'active':''}" onclick="setMobTestAnswer('${f}',${v})">${SCALE_LABEL[v]}</button>`).join('')}
+        </div>${prevTxt}
+      </div>`;
+    }
+    return `<div style="margin-bottom:12px;">
+      ${label ? `<div style="font-size:.78rem;font-weight:700;margin-bottom:6px;">${label}</div>` : ''}
+      <div style="display:flex;align-items:center;gap:8px;">
+        <input type="number" inputmode="${t.allowNegative ? 'text' : 'decimal'}" step="0.5" id="mobTestIn-${f}" value="${ans[f] ?? ''}"
+          placeholder="${t.type === 'cm' ? 'cm' : 'segundos'}" oninput="setMobTestAnswer('${f}', this.value === '' ? null : Number(this.value), true)"
+          style="flex:1;margin-bottom:0;font-size:1.1rem;text-align:center;">
+        <span style="font-size:.8rem;color:var(--muted);width:24px;">${t.type === 'cm' ? 'cm' : 's'}</span>
+      </div>${prevTxt}
+    </div>`;
+  }).join('');
+  const isLast = mobTestWiz.idx === MOB_TESTS.length - 1;
+  document.getElementById('mobTestBody').innerHTML = `
+    <div class="mob-progress" style="margin-top:0;"><div style="width:${(mobTestWiz.idx / MOB_TESTS.length) * 100}%;"></div></div>
+    <div style="font-size:.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;">Test ${mobTestWiz.idx + 1} de ${MOB_TESTS.length} · ${t.area}</div>
+    <div style="font-family:'Bebas Neue',sans-serif;font-size:1.6rem;margin:4px 0 8px;">${t.icon} ${t.name}</div>
+    <div class="cues-box" style="font-size:.82rem;color:var(--text);opacity:.9;">${t.how}</div>
+    <div style="font-size:.74rem;color:var(--muted);margin:-2px 0 14px;">💡 ${t.hint}</div>
+    ${inputs}
+    <div style="display:flex;gap:8px;margin-top:6px;">
+      ${mobTestWiz.idx > 0 ? `<button class="tc-btn" style="flex:0 0 auto;padding:12px 16px;" onclick="mobTestGo(-1)">‹</button>` : ''}
+      <button class="tc-btn" onclick="mobTestSkip()">Saltar</button>
+      <button class="sheet-btn" style="flex:2;" onclick="mobTestGo(1)">${isLast ? '✅ Guardar tests' : 'Siguiente ›'}</button>
+    </div>`;
+}
+function setMobTestAnswer(field, value, fromInput){
+  const t = MOB_TESTS[mobTestWiz.idx];
+  if(!mobTestWiz.answers[t.key]) mobTestWiz.answers[t.key] = {};
+  mobTestWiz.answers[t.key][field] = value;
+  if(!fromInput) renderMobTestStep();
+}
+function mobTestAnswerComplete(t){
+  const a = mobTestWiz.answers[t.key] || {};
+  return t.sides ? (a.left != null && a.right != null) : a.value != null;
+}
+function mobTestSkip(){
+  delete mobTestWiz.answers[MOB_TESTS[mobTestWiz.idx].key];
+  mobTestGo(1, true);
+}
+async function mobTestGo(dir, skipping){
+  const t = MOB_TESTS[mobTestWiz.idx];
+  if(dir > 0 && !skipping && !mobTestAnswerComplete(t)){
+    showToast(t.sides ? '⚠️ Completa ambos lados o toca Saltar' : '⚠️ Completa el valor o toca Saltar', true);
+    return;
+  }
+  const next = mobTestWiz.idx + dir;
+  if(next >= MOB_TESTS.length){ await saveMobTests(); return; }
+  mobTestWiz.idx = Math.max(0, next);
+  renderMobTestStep();
+}
+async function saveMobTests(){
+  const today = localDateStr();
+  const rows = [];
+  MOB_TESTS.forEach(t => {
+    const a = mobTestWiz.answers[t.key];
+    if(!a || !mobTestAnswerComplete(t)) return;
+    if(t.sides) ['left','right'].forEach(sd => rows.push({ user_id: currentUser.id, test_key: t.key, side: sd, value: a[sd], test_date: today }));
+    else rows.push({ user_id: currentUser.id, test_key: t.key, side: null, value: a.value, test_date: today });
+  });
+  if(!rows.length){ showToast('⚠️ No completaste ningún test', true); return; }
+  // si ya hiciste tests hoy, los de hoy se reemplazan
+  const keys = [...new Set(rows.map(r => r.test_key))];
+  const { error: delErr } = await sb.from('mobility_tests').delete().eq('user_id', currentUser.id).eq('test_date', today).in('test_key', keys);
+  if(delErr){ showSaveError(delErr); return; }
+  const { error } = await sb.from('mobility_tests').insert(rows);
+  if(error){ showSaveError(error); return; }
+  closeMobTestWizard();
+  playSessionDoneSound();
+  showToast(`✅ ${keys.length} test${keys.length===1?'':'s'} guardado${keys.length===1?'':'s'}`);
+  await renderMobilityTests();
+}
+
+// ── HISTORIAL DE UN TEST ──
+let mobTestChart = null;
+function openMobTestHistory(key){
+  const t = MOB_TESTS.find(x => x.key === key);
+  const hist = testHistory(key);
+  document.getElementById('mobTestHistTitle').textContent = `${t.icon} ${t.name}`;
+  document.getElementById('mobTestHistHint').textContent = t.hint;
+  const fmtDate = d => new Date(d + 'T00:00:00').toLocaleDateString('es-CL', { day:'numeric', month:'short' });
+  const datasets = t.sides
+    ? [{ label:'Izquierdo', data: hist.map(h => h.left ?? null), borderColor:'#3ddc97', backgroundColor:'#3ddc97' },
+       { label:'Derecho', data: hist.map(h => h.right ?? null), borderColor:'#5aa9ff', backgroundColor:'#5aa9ff' }]
+    : [{ label:t.name, data: hist.map(h => h.value ?? null), borderColor:'#3ddc97', backgroundColor:'rgba(61,220,151,.15)', fill:true }];
+  datasets.forEach(ds => Object.assign(ds, { tension:.3, pointRadius:4, spanGaps:true }));
+  if(mobTestChart) mobTestChart.destroy();
+  mobTestChart = new Chart(document.getElementById('mobTestCanvas').getContext('2d'), {
+    type:'line',
+    data:{ labels: hist.map(h => fmtDate(h.date)), datasets },
+    options:{
+      responsive:true,
+      plugins:{ legend:{ display: t.sides, labels:{ color:'#8b8f9a', boxWidth:10 } } },
+      scales:{
+        x:{ ticks:{ color:'#8b8f9a', font:{size:10} }, grid:{ color:'#262a33' } },
+        y:{ ticks:{ color:'#8b8f9a', font:{size:10}, ...(t.type === 'scale' ? { stepSize:1, callback: v => SCALE_LABEL[v] ?? '' } : {}) },
+            grid:{ color:'#262a33' }, ...(t.type === 'scale' ? { min:0, max:2 } : {}) }
+      }
+    }
+  });
+  document.getElementById('mobTestHistTable').innerHTML = hist.slice().reverse().map(h => `
+    <tr style="border-bottom:1px solid var(--border);">
+      <td style="padding:6px 4px;">${fmtDate(h.date)}</td>
+      <td style="padding:6px 4px;">${t.sides ? `${SIDE_LABEL.left} ${fmtTestValue(t, h.left)} · ${SIDE_LABEL.right} ${fmtTestValue(t, h.right)}` : fmtTestValue(t, h.value)}</td>
+    </tr>`).join('');
+  document.getElementById('mobTestHistOverlay').classList.add('show');
+}
+function closeMobTestHistory(){ document.getElementById('mobTestHistOverlay').classList.remove('show'); }
 
 // ── REPRODUCTOR ──
 let mobState = null, mobInterval = null, mobWakeLock = null;
