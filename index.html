@@ -795,6 +795,38 @@ async function loadDays(){
   renderDays();
 }
 
+// ── DURACIÓN ESTIMADA ──
+// segundos que toma una serie según el texto de reps: "10", "8/lado", "20 seg", "15-20 min", "2×15 m"
+function estimateSetSec(repsText){
+  const t = String(repsText || '').toLowerCase();
+  const n = parseFloat((t.match(/\d+(\.\d+)?/) || [])[0]) || 10;
+  const perSide = /\/(lado|pierna|brazo)/.test(t) ? 2 : 1;
+  if(/min/.test(t)) return n * 60;
+  if(/seg|\bs\b/.test(t)) return n * perSide;
+  if(/\bm\b/.test(t)) return 20 * perSide;          // metros (carioca, sprints)
+  return Math.min(120, Math.max(20, n * 3 + 10)) * perSide; // ~3 s por repetición + preparar
+}
+function estimateDayMinutes(d){
+  let sec = 0;
+  (d.exercises || []).forEach(ex => {
+    const series = ex.series || 1;
+    const setSec = estimateSetSec(ex.reps);
+    if((ex.category || 'strength') === 'strength'){
+      const rest = getRestSec(ex.id, ex.rest_sec || 0);
+      sec += series * setSec + Math.max(0, series - 1) * rest + 60; // + cambio de ejercicio / armar máquina
+    } else {
+      sec += series * setSec + 15;
+    }
+  });
+  if(!sec) return 0;
+  return Math.max(5, Math.round(sec / 60 / 5) * 5);
+}
+function durationLabel(d){
+  const m = estimateDayMinutes(d);
+  if(!m) return '';
+  return m < 60 ? `~${m} min` : `~${Math.floor(m/60)} h${m%60 ? ' ' + (m%60) + ' min' : ''}`;
+}
+
 function weekdaysLabel(weekdays){
   if(!weekdays || !weekdays.length) return '';
   const order = [1,2,3,4,5,6,0];
@@ -813,7 +845,7 @@ function renderDays(){
         <span class="day-type-badge">${DAY_TYPE_ICON[d.day_type]||'✨'}</span>
         <div style="flex:1;cursor:pointer;" onclick="toggleDay('${d.id}')">
           <div class="day-name">${d.name}</div>
-          <div class="day-count">${d.exercises.length} ejercicio${d.exercises.length===1?'':'s'}${weekdaysLabel(d.weekdays)} ${d.doneToday ? '· ✅ hecho hoy' : ''}</div>
+          <div class="day-count">${d.exercises.length} ejercicio${d.exercises.length===1?'':'s'}${d.exercises.length ? ` · ⏱ ${durationLabel(d)}` : ''}${weekdaysLabel(d.weekdays)} ${d.doneToday ? '· ✅ hecho hoy' : ''}</div>
         </div>
         <div class="day-actions">
           <button class="icon-btn" onclick="openEditDay('${d.id}')">✎</button>
@@ -1797,7 +1829,7 @@ async function openSessionMode(dayId){
   sessionModeDayId = dayId;
   const d = DAYS.find(x => x.id === dayId);
   if(!d) return;
-  document.getElementById('sessionModeTitle').textContent = `${DAY_TYPE_ICON[d.day_type]||''} ${d.name}`;
+  document.getElementById('sessionModeTitle').textContent = `${DAY_TYPE_ICON[d.day_type]||''} ${d.name}${d.exercises.length ? ' · ' + durationLabel(d) : ''}`;
   const box = document.getElementById('sessionModeList');
   if(!d.exercises.length){
     box.innerHTML = `<div class="empty-state">Este día no tiene ejercicios todavía — agrégalos primero en la pestaña Rutina.</div>`;
@@ -2944,7 +2976,10 @@ async function renderInicio(){
         <div class="day-card" style="padding:12px 14px;cursor:pointer;" onclick="openSessionMode('${d.id}')">
           <div style="display:flex;align-items:center;gap:10px;">
             <span style="font-size:1.3rem;">${DAY_TYPE_ICON[d.day_type]||'✨'}</span>
-            <div style="flex:1;font-weight:700;font-size:.88rem;">${d.name}</div>
+            <div style="flex:1;">
+              <div style="font-weight:700;font-size:.88rem;">${d.name}</div>
+              ${d.exercises.length ? `<div style="font-size:.72rem;color:var(--muted);margin-top:2px;">${d.exercises.length} ejercicios · ⏱ ${durationLabel(d)}</div>` : ''}
+            </div>
             ${d.doneToday ? '<span style="color:var(--green);font-size:.78rem;">✅ Hecho</span>' : '<span style="color:var(--muted);font-size:.78rem;">Pendiente ›</span>'}
           </div>
         </div>`).join('');
