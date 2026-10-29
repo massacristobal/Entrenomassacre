@@ -151,6 +151,7 @@
   .stub-note{text-align:center;padding:50px 20px;color:var(--muted);font-size:.85rem;line-height:1.6;}
   .toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--accent);color:#000;padding:10px 18px;border-radius:20px;font-size:.78rem;font-weight:700;opacity:0;pointer-events:none;transition:.25s;z-index:1000;}
   .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+  .toast.error{background:var(--danger);color:#fff;}
 </style>
 </head>
 <body>
@@ -523,6 +524,7 @@ async function handleGoogleAuth(){
   }
 }
 async function handleLogout(){
+  if(!confirm('¿Cerrar sesión?')) return;
   await sb.auth.signOut();
   currentUser = null;
   document.getElementById('mainApp').classList.add('hidden');
@@ -568,22 +570,42 @@ function setProgressMetric(metric){
   document.querySelectorAll('#progressMetricPick button').forEach(b => b.classList.toggle('active', b.dataset.metric === metric));
   loadProgressChart();
 }
+// el mismo ejercicio puede estar en varios días: se agrupan por nombre para ver un solo historial
+let PROGRESS_GROUPS = {}; // key -> { label, ids:[exercise_id...] }
+function progressKey(ex){ return (ex.name_en || ex.name || '').toLowerCase().trim(); }
 function loadProgressExerciseList(){
-  const opts = [];
-  DAYS.forEach(d => d.exercises.filter(ex => (ex.category||'strength')==='strength').forEach(ex => opts.push({ id: ex.id, label: `${ex.name} (${d.name})` })));
+  PROGRESS_GROUPS = {};
+  DAYS.forEach(d => d.exercises.filter(ex => (ex.category||'strength')==='strength').forEach(ex => {
+    const key = progressKey(ex);
+    if(!PROGRESS_GROUPS[key]) PROGRESS_GROUPS[key] = { label: ex.name, ids: [], days: [] };
+    PROGRESS_GROUPS[key].ids.push(ex.id);
+    PROGRESS_GROUPS[key].days.push(d.name);
+  }));
+  const keys = Object.keys(PROGRESS_GROUPS).sort((a,b) => PROGRESS_GROUPS[a].label.localeCompare(PROGRESS_GROUPS[b].label, 'es'));
   const sel = document.getElementById('progressExSelect');
   const prevVal = sel.value;
-  sel.innerHTML = '<option value="">Elige un ejercicio...</option>' + opts.map(o => `<option value="${o.id}">${o.label}</option>`).join('');
+  sel.innerHTML = '<option value="">Elige un ejercicio...</option>' + keys.map(k => {
+    const g = PROGRESS_GROUPS[k];
+    const where = g.days.length > 1 ? `${g.days.length} días` : g.days[0];
+    return `<option value="${escHtml(k)}">${escHtml(g.label)} (${escHtml(where)})</option>`;
+  }).join('');
   document.querySelectorAll('#progressMetricPick button').forEach(b => b.classList.toggle('active', b.dataset.metric === progressMetric));
-  if(opts.some(o => o.id === prevVal)){ sel.value = prevVal; loadProgressChart(); }
+  if(PROGRESS_GROUPS[prevVal]){ sel.value = prevVal; loadProgressChart(); }
 }
 const PROGRESS_METRIC_LABEL = { weight:'Peso máx (kg)', reps:'Reps totales', volume:'Volumen (kg × reps)' };
 async function loadProgressChart(){
-  const exId = document.getElementById('progressExSelect').value;
+  const group = PROGRESS_GROUPS[document.getElementById('progressExSelect').value];
   const wrap = document.getElementById('progressChartWrap');
   const empty = document.getElementById('progressEmpty');
-  if(!exId){ wrap.classList.add('hidden'); empty.classList.remove('hidden'); return; }
-  const { data: logs, error } = await sb.from('set_logs').select('*').eq('exercise_id', exId).order('logged_at');
+  if(!group){ wrap.classList.add('hidden'); empty.classList.remove('hidden'); return; }
+  const { data: rawLogs, error } = await sb.from('set_logs').select('*').in('exercise_id', group.ids).order('logged_at');
+  // fecha local (no UTC) y una sola fila por serie y día: si se guardó dos veces, vale la última
+  const lastBySerie = {};
+  (rawLogs||[]).forEach(l => {
+    const localDate = localDateStr(new Date(l.logged_at));
+    lastBySerie[`${localDate}|${l.exercise_id}|${l.serie_number}`] = { ...l, localDate };
+  });
+  const logs = Object.values(lastBySerie).sort((a,b) => a.logged_at.localeCompare(b.logged_at));
   if(error || !logs || !logs.length){
     wrap.classList.add('hidden');
     empty.classList.remove('hidden');
@@ -596,7 +618,7 @@ async function loadProgressChart(){
   // agrupar por día según la métrica elegida
   const byDate = {};
   logs.forEach(l => {
-    const d = l.logged_at.slice(0,10);
+    const d = l.localDate;
     const w = l.weight || 0;
     const r = l.reps || 0;
     if(!(d in byDate)) byDate[d] = { maxWeight:0, totalReps:0, volume:0 };
@@ -626,7 +648,7 @@ async function loadProgressChart(){
   const tbody = document.getElementById('progressTableBody');
   tbody.innerHTML = logs.slice().reverse().map(l => `
     <tr style="border-bottom:1px solid var(--border);">
-      <td style="padding:6px 4px;">${l.logged_at.slice(0,10)}</td>
+      <td style="padding:6px 4px;">${l.localDate}</td>
       <td style="padding:6px 4px;">${l.serie_number}</td>
       <td style="padding:6px 4px;">${l.weight ?? '—'}</td>
       <td style="padding:6px 4px;">${l.reps ?? '—'}</td>
@@ -1151,17 +1173,29 @@ function renderSetRows(exId, presetLogs, suggestedLogs){
   }
   box.innerHTML = html;
 }
+// guarda la serie de hoy; si esa serie ya se registró hoy la corrige en vez de duplicarla.
+// devuelve el error (o null si se guardó bien)
+async function upsertTodaySetLog(exId, serieNum, w, r){
+  try{
+    const { startISO, endISO } = todayRangeISO();
+    const { data: existing, error: selErr } = await sb.from('set_logs').select('id')
+      .eq('exercise_id', exId).eq('serie_number', serieNum)
+      .gte('logged_at', startISO).lt('logged_at', endISO)
+      .order('logged_at', { ascending:false }).limit(1);
+    if(selErr) return selErr;
+    const fields = { weight: w ? parseFloat(w) : null, reps: r ? parseInt(r) : null };
+    const { error } = (existing && existing.length)
+      ? await sb.from('set_logs').update(fields).eq('id', existing[0].id)
+      : await sb.from('set_logs').insert({ user_id: currentUser.id, exercise_id: exId, serie_number: serieNum, ...fields });
+    return error;
+  }catch(e){ return e; }
+}
 async function saveSet(exId, serieNum){
   const w = document.getElementById(`w-${exId}-${serieNum}`).value;
   const r = document.getElementById(`r-${exId}-${serieNum}`).value;
   if(!w && !r) return;
-  await sb.from('set_logs').insert({
-    user_id: currentUser.id,
-    exercise_id: exId,
-    serie_number: serieNum,
-    weight: w ? parseFloat(w) : null,
-    reps: r ? parseInt(r) : null
-  });
+  const err = await upsertTodaySetLog(exId, serieNum, w, r);
+  if(err){ showSaveError(err); return; }
   const btn = document.getElementById(`save-${exId}-${serieNum}`);
   btn.classList.add('saved');
   showToast('✅ Serie guardada');
@@ -1193,19 +1227,15 @@ async function autoMarkSet(exId, serieNum){
   const w = a.w || b.w;
   const r = a.r || b.r;
   if(w || r){
-    await sb.from('set_logs').insert({
-      user_id: currentUser.id,
-      exercise_id: exId,
-      serie_number: serieNum,
-      weight: w ? parseFloat(w) : null,
-      reps: r ? parseInt(r) : null
-    });
+    const err = await upsertTodaySetLog(exId, serieNum, w, r);
+    if(err){ showSaveError(err); return false; }
   }
   const saveBtn1 = document.getElementById(`save-${exId}-${serieNum}`);
   const saveBtn2 = document.getElementById(`sm-save-${exId}-${serieNum}`);
   if(saveBtn1) saveBtn1.classList.add('saved');
   if(saveBtn2) saveBtn2.classList.add('saved');
   updateExerciseCompletionBadge(exId);
+  return true;
 }
 
 let addExContext = null; // dayId
@@ -1276,13 +1306,19 @@ async function insertExercise(dayId, fields){
   showToast(`✅ "${fields.name}" agregado`);
 }
 async function deleteExercise(exId, dayId){
-  await sb.from('exercises').delete().eq('id', exId);
+  const ex = findExercise(exId);
+  if(!confirm(`¿Quitar "${ex ? ex.name : 'este ejercicio'}" de este día?`)) return;
+  const { error } = await sb.from('exercises').delete().eq('id', exId);
+  if(error){ showSaveError(error); return; }
   await loadDays();
   document.getElementById('daybody-' + dayId).classList.add('open');
 }
 async function saveExerciseNotes(exId){
   const val = document.getElementById('notes-' + exId).value;
-  await sb.from('exercises').update({ notes: val }).eq('id', exId);
+  const ex0 = findExercise(exId);
+  if(ex0 && (ex0.notes || '') === val) return;
+  const { error } = await sb.from('exercises').update({ notes: val }).eq('id', exId);
+  if(error){ showSaveError(error); return; }
   const ex = findExercise(exId);
   if(ex) ex.notes = val;
   showToast('📝 Nota guardada');
@@ -1292,7 +1328,8 @@ async function adjustExerciseSeries(exId, delta){
   if(!ex) return;
   const newSeries = Math.max(1, Math.min(12, ex.series + delta));
   if(newSeries === ex.series) return;
-  await sb.from('exercises').update({ series: newSeries }).eq('id', exId);
+  const { error } = await sb.from('exercises').update({ series: newSeries }).eq('id', exId);
+  if(error){ showSaveError(error); return; }
   ex.series = newSeries;
   const metaEl = document.querySelector(`#excard-${exId} .ex-meta`);
   if(metaEl) metaEl.textContent = `${ex.series} series × ${ex.reps} · ${ex.rest_sec}s descanso`;
@@ -1321,9 +1358,11 @@ async function moveExercise(exId, dayId, direction){
 // ═══════════════════════════════════════════
 // SESSIONS (marcar día como hecho → alimenta calendario)
 // ═══════════════════════════════════════════
+// devuelve false si alguna serie no se pudo guardar
 async function autoSaveUnsavedSets(dayId){
   const d = DAYS.find(x => x.id === dayId);
-  if(!d) return;
+  if(!d) return true;
+  let allOk = true;
   for(const ex of d.exercises){
     for(let i=1; i<=ex.series; i++){
       const b1 = document.getElementById(`save-${ex.id}-${i}`);
@@ -1333,10 +1372,11 @@ async function autoSaveUnsavedSets(dayId){
       const a = readSetInput(ex.id, i, '');
       const b = readSetInput(ex.id, i, 'sm-');
       if(a.w || a.r || b.w || b.r){
-        await autoMarkSet(ex.id, i);
+        if(!(await autoMarkSet(ex.id, i))) allOk = false;
       }
     }
   }
+  return allOk;
 }
 async function linkTodaySetLogsToSession(dayId, sessionId){
   const d = DAYS.find(x => x.id === dayId);
@@ -1353,10 +1393,12 @@ async function toggleSessionDone(dayId){
   const d = DAYS.find(x => x.id === dayId);
   const todayStr = localDateStr();
   if(d.doneToday){
-    await sb.from('sessions').delete().eq('user_id', currentUser.id).eq('day_id', dayId).eq('session_date', todayStr);
+    const { error } = await sb.from('sessions').delete().eq('user_id', currentUser.id).eq('day_id', dayId).eq('session_date', todayStr);
+    if(error){ showSaveError(error); return; }
   } else {
-    await autoSaveUnsavedSets(dayId);
-    const { data: newSession } = await sb.from('sessions').insert({ user_id: currentUser.id, day_id: dayId, session_date: todayStr, day_type: d.day_type, completed: true }).select().single();
+    if(!(await autoSaveUnsavedSets(dayId))) return;
+    const { data: newSession, error } = await sb.from('sessions').insert({ user_id: currentUser.id, day_id: dayId, session_date: todayStr, day_type: d.day_type, completed: true }).select().single();
+    if(error){ showSaveError(error); return; }
     if(newSession) await linkTodaySetLogsToSession(dayId, newSession.id);
     showToast('🔥 ¡Sesión registrada!');
   }
@@ -1714,13 +1756,8 @@ async function saveSetSession(exId, serieNum){
   const w = document.getElementById(`sm-w-${exId}-${serieNum}`).value;
   const r = document.getElementById(`sm-r-${exId}-${serieNum}`).value;
   if(!w && !r) return;
-  await sb.from('set_logs').insert({
-    user_id: currentUser.id,
-    exercise_id: exId,
-    serie_number: serieNum,
-    weight: w ? parseFloat(w) : null,
-    reps: r ? parseInt(r) : null
-  });
+  const err = await upsertTodaySetLog(exId, serieNum, w, r);
+  if(err){ showSaveError(err); return; }
   document.getElementById(`sm-save-${exId}-${serieNum}`).classList.add('saved');
   showToast('✅ Serie guardada');
   updateExerciseCompletionBadge(exId);
@@ -1729,10 +1766,10 @@ async function finishSessionMode(){
   const d = DAYS.find(x => x.id === sessionModeDayId);
   if(!d) return;
   if(d.doneToday){ closeSessionMode(); return; }
-  await autoSaveUnsavedSets(d.id);
+  if(!(await autoSaveUnsavedSets(d.id))) return;
   const todayStr = localDateStr();
   const { data: newSession, error } = await sb.from('sessions').insert({ user_id: currentUser.id, day_id: d.id, session_date: todayStr, day_type: d.day_type, completed: true }).select().single();
-  if(error){ showToast('⚠️ ' + error.message); return; }
+  if(error){ showSaveError(error); return; }
   if(newSession) await linkTodaySetLogsToSession(d.id, newSession.id);
   playSessionDoneSound();
   showToast('🔥 ¡Sesión completada!');
@@ -1743,11 +1780,21 @@ async function finishSessionMode(){
 // ═══════════════════════════════════════════
 // TOAST
 // ═══════════════════════════════════════════
-function showToast(msg){
+let toastTimeout = null;
+function showToast(msg, isError){
   const t = document.getElementById('toast');
   t.textContent = msg;
+  t.classList.toggle('error', !!isError);
   t.classList.add('show');
-  setTimeout(() => t.classList.remove('show'), 2200);
+  clearTimeout(toastTimeout);
+  toastTimeout = setTimeout(() => t.classList.remove('show'), isError ? 4000 : 2200);
+}
+function showSaveError(err){
+  console.error(err);
+  showToast('⚠️ No se guardó — revisa tu conexión e intenta de nuevo', true);
+}
+function escHtml(str){
+  return String(str ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
 
 // ═══════════════════════════════════════════
@@ -2090,11 +2137,10 @@ async function renderSupplements(){
 }
 async function toggleSupplementDate(suppId, dateStr){
   const { data: existing } = await sb.from('supplement_logs').select('*').eq('supplement_id', suppId).eq('log_date', dateStr).maybeSingle();
-  if(existing){
-    await sb.from('supplement_logs').delete().eq('id', existing.id);
-  } else {
-    await sb.from('supplement_logs').insert({ user_id: currentUser.id, supplement_id: suppId, log_date: dateStr, taken: true });
-  }
+  const { error } = existing
+    ? await sb.from('supplement_logs').delete().eq('id', existing.id)
+    : await sb.from('supplement_logs').insert({ user_id: currentUser.id, supplement_id: suppId, log_date: dateStr, taken: true });
+  if(error){ showSaveError(error); return; }
   await renderHabitsCalendar();
   await renderSupplements();
 }
@@ -2102,11 +2148,10 @@ async function adjustHabitAmount(suppId, delta){
   const { data: existing } = await sb.from('supplement_logs').select('*').eq('supplement_id', suppId).eq('log_date', selectedHabitDate).maybeSingle();
   const current = existing ? (existing.amount || 0) : 0;
   const next = Math.max(0, Math.round((current + delta) * 100) / 100);
-  if(existing){
-    await sb.from('supplement_logs').update({ amount: next, taken: next > 0 }).eq('id', existing.id);
-  } else {
-    await sb.from('supplement_logs').insert({ user_id: currentUser.id, supplement_id: suppId, log_date: selectedHabitDate, amount: next, taken: next > 0 });
-  }
+  const { error } = existing
+    ? await sb.from('supplement_logs').update({ amount: next, taken: next > 0 }).eq('id', existing.id)
+    : await sb.from('supplement_logs').insert({ user_id: currentUser.id, supplement_id: suppId, log_date: selectedHabitDate, amount: next, taken: next > 0 });
+  if(error){ showSaveError(error); return; }
   await renderHabitsCalendar();
   await renderSupplements();
 }
