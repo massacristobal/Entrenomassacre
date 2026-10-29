@@ -148,6 +148,25 @@
   .cues-box-timer{display:none;max-width:320px;margin-top:10px;padding:12px;background:var(--card);border:1px solid var(--border);border-radius:10px;font-size:.76rem;color:var(--muted);text-align:left;line-height:1.5;}
   .cues-box-timer.open{display:block;}
 
+  /* MOVILIDAD */
+  .mob-card{display:flex;align-items:center;gap:12px;background:var(--card);border:1px solid var(--border);border-left:4px solid var(--accent);border-radius:12px;padding:14px;margin-bottom:10px;cursor:pointer;}
+  .mob-icon{font-size:1.6rem;width:36px;text-align:center;flex-shrink:0;}
+  .mob-name{font-weight:700;font-size:.95rem;}
+  .mob-desc{font-size:.76rem;color:var(--muted);margin-top:2px;line-height:1.35;}
+  .mob-meta{font-size:.72rem;color:var(--text);opacity:.8;margin-top:6px;}
+  .mob-pose-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);}
+  .mob-thumb{width:36px;height:36px;border-radius:8px;background:var(--surface);display:flex;align-items:center;justify-content:center;font-size:1rem;flex-shrink:0;overflow:hidden;opacity:.9;}
+  .mob-thumb img{width:100%;height:100%;object-fit:cover;background:#fff;}
+  .mob-pose-num{width:22px;text-align:center;font-family:'Bebas Neue',sans-serif;font-size:1.1rem;color:var(--muted);flex-shrink:0;}
+  #mobPlayerOverlay{display:none;position:fixed;top:0;bottom:0;left:0;right:0;margin:0 auto;width:100%;max-width:480px;z-index:999;background:var(--bg);flex-direction:column;padding:16px 20px 24px;overflow-y:auto;}
+  #mobPlayerOverlay.show{display:flex;}
+  .mob-progress{height:4px;background:var(--surface);border-radius:2px;overflow:hidden;margin:10px 0 16px;}
+  .mob-progress div{height:100%;background:var(--accent);transition:width .3s;}
+  .mob-gif{width:100%;max-width:220px;max-height:180px;object-fit:contain;border-radius:12px;background:#fff;margin:0 auto 12px;display:block;}
+  .mob-side{display:inline-block;background:rgba(234,179,8,.15);color:var(--yellow);border-radius:20px;padding:4px 12px;font-size:.8rem;font-weight:700;margin-top:6px;}
+  .mob-ctrl{display:flex;gap:10px;justify-content:center;margin-top:16px;}
+  .mob-ctrl button{width:60px;height:60px;border-radius:50%;background:var(--card);border:1px solid var(--border);color:var(--text);font-size:1.3rem;}
+  .mob-ctrl button.primary{width:72px;height:72px;border-color:var(--accent);color:var(--accent);font-size:1.6rem;}
   .stub-note{text-align:center;padding:50px 20px;color:var(--muted);font-size:.85rem;line-height:1.6;}
   .toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--accent);color:#000;padding:10px 18px;border-radius:20px;font-size:.78rem;font-weight:700;opacity:0;pointer-events:none;transition:.25s;z-index:1000;}
   .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
@@ -202,7 +221,7 @@
       </div>
       <div style="flex:1;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px;text-align:center;cursor:pointer;" onclick="switchTab('calendario')">
         <div id="inicioMonthStat" style="font-family:'Bebas Neue',sans-serif;font-size:1.8rem;color:var(--accent3);">0</div>
-        <div style="font-size:.66rem;color:var(--muted);text-transform:uppercase;">Este mes ›</div>
+        <div style="font-size:.66rem;color:var(--muted);text-transform:uppercase;">Este mes · 📅 Calendario ›</div>
       </div>
     </div>
     <div id="inicioTodayBox"></div>
@@ -215,6 +234,23 @@
     <button class="add-btn" onclick="openAddDay()">＋ Agregar día</button>
     <button class="add-btn" style="border-style:solid;border-color:var(--accent3);color:var(--accent3);margin-top:8px;" onclick="loadSuggestedRoutine2()">⚡ Cargar rutina sugerida — empuje/pierna/tirón/potencia</button>
     <button class="add-btn" style="border-style:solid;border-color:#a855f7;color:#a855f7;margin-top:8px;" onclick="openGenRoutine()">🎯 Generar mi rutina (responde 3 preguntas)</button>
+  </div>
+
+  <!-- TAB: MOVILIDAD -->
+  <div class="tab-panel" id="panel-movilidad">
+    <div style="display:flex;gap:10px;margin-bottom:14px;">
+      <div style="flex:1;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px;text-align:center;">
+        <div id="mobStreakStat" style="font-family:'Bebas Neue',sans-serif;font-size:1.8rem;color:var(--yellow);">0</div>
+        <div style="font-size:.7rem;color:var(--muted);text-transform:uppercase;">Racha de días</div>
+      </div>
+      <div style="flex:1;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px;text-align:center;">
+        <div id="mobWeekStat" style="font-family:'Bebas Neue',sans-serif;font-size:1.8rem;color:var(--accent);">0</div>
+        <div style="font-size:.7rem;color:var(--muted);text-transform:uppercase;">Esta semana</div>
+      </div>
+    </div>
+    <div id="mobTodayDone" class="hidden" style="background:rgba(61,220,151,.1);border:1px solid var(--green);color:var(--green);border-radius:10px;padding:10px 12px;font-size:.82rem;font-weight:700;margin-bottom:14px;">✅ Ya hiciste movilidad hoy</div>
+    <div style="font-size:.72rem;color:var(--muted);letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;">Rutinas guiadas</div>
+    <div id="mobilityList"></div>
   </div>
 
   <!-- TAB: PROGRESO -->
@@ -241,6 +277,7 @@
 
   <!-- TAB: CALENDARIO -->
   <div class="tab-panel" id="panel-calendario">
+    <button class="icon-btn" style="width:auto;padding:0 12px;margin-bottom:12px;font-size:.78rem;" onclick="switchTab('inicio')">‹ Inicio</button>
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
       <button class="icon-btn" onclick="calShiftMonth(-1)">‹</button>
       <div id="calMonthLabel" style="font-weight:700;font-size:.95rem;text-transform:capitalize;"></div>
@@ -275,8 +312,8 @@
 <div id="tabbar" class="hidden">
   <button class="tab-btn active" data-tab="inicio" onclick="switchTab('inicio')"><span class="ic">🏠</span>Inicio</button>
   <button class="tab-btn" data-tab="rutina" onclick="switchTab('rutina')"><span class="ic">🏋️</span>Rutina</button>
+  <button class="tab-btn" data-tab="movilidad" onclick="switchTab('movilidad')"><span class="ic">🧘</span>Movilidad</button>
   <button class="tab-btn" data-tab="progreso" onclick="switchTab('progreso')"><span class="ic">📈</span>Progreso</button>
-  <button class="tab-btn" data-tab="calendario" onclick="switchTab('calendario')"><span class="ic">📅</span>Calendario</button>
   <button class="tab-btn" data-tab="suplementos" onclick="switchTab('suplementos')"><span class="ic">✅</span>Hábitos</button>
 </div>
 
@@ -458,6 +495,61 @@
   <button class="mark-done-btn" id="sessionModeFinishBtn" style="margin-top:16px;position:fixed;bottom:16px;left:16px;right:16px;max-width:448px;margin-left:auto;margin-right:auto;" onclick="finishSessionMode()">✅ Finalizar sesión</button>
 </div>
 
+<!-- MOVILIDAD: DETALLE DE RUTINA -->
+<div class="sheet-overlay" id="mobSheetOverlay" onclick="if(event.target===this)closeMobilitySheet()">
+  <div class="sheet">
+    <div class="sheet-head"><h3 id="mobSheetTitle"></h3><button class="icon-btn" onclick="closeMobilitySheet()">✕</button></div>
+    <div id="mobSheetMeta" style="font-size:.78rem;color:var(--muted);margin-bottom:8px;line-height:1.4;"></div>
+    <div id="mobSheetList" style="margin-bottom:16px;"></div>
+    <button class="sheet-btn" style="padding:13px;font-size:.9rem;" onclick="startMobilityRoutine()">▶ Empezar rutina</button>
+  </div>
+</div>
+
+<!-- MOVILIDAD: REPRODUCTOR GUIADO -->
+<div id="mobPlayerOverlay">
+  <div style="display:flex;align-items:center;justify-content:space-between;">
+    <div id="mobPlayerRoutine" style="font-weight:700;font-size:.9rem;"></div>
+    <div style="display:flex;align-items:center;gap:10px;">
+      <span id="mobPlayerCount" style="font-size:.78rem;color:var(--muted);"></span>
+      <button class="icon-btn" onclick="closeMobilityPlayer()">✕</button>
+    </div>
+  </div>
+  <div id="mobPlayerMain" style="display:flex;flex-direction:column;flex:1;">
+    <div class="mob-progress"><div id="mobPlayerProgress"></div></div>
+    <div style="text-align:center;">
+      <img id="mobPlayerGif" class="mob-gif hidden" alt="">
+      <div id="mobPlayerName" style="font-family:'Bebas Neue',sans-serif;font-size:1.7rem;letter-spacing:.5px;line-height:1.1;"></div>
+      <div id="mobPlayerSide" class="mob-side hidden"></div>
+    </div>
+    <div style="display:flex;flex-direction:column;align-items:center;margin-top:14px;">
+      <div class="timer-badge rest" id="mobPlayerBadge" style="margin-bottom:10px;">PREPÁRATE</div>
+      <div class="ring-wrap" style="width:160px;height:160px;margin-bottom:0;">
+        <svg width="160" height="160" viewBox="0 0 220 220">
+          <circle cx="110" cy="110" r="88" fill="none" stroke="var(--surface)" stroke-width="12"/>
+          <circle id="mobRingFill" cx="110" cy="110" r="88" fill="none" stroke="var(--accent)" stroke-width="12"
+            stroke-linecap="round" stroke-dasharray="553" stroke-dashoffset="0" transform="rotate(-90 110 110)"/>
+        </svg>
+        <div id="mobPlayerDigits" style="font-family:'Bebas Neue',sans-serif;font-size:3.2rem;position:absolute;inset:0;display:flex;align-items:center;justify-content:center;"></div>
+      </div>
+    </div>
+    <div id="mobPlayerCue" style="font-size:.86rem;line-height:1.5;color:var(--text);opacity:.85;text-align:center;margin-top:14px;min-height:3.9em;"></div>
+    <div class="mob-ctrl">
+      <button onclick="mobilityPrev()" aria-label="Anterior">⏮</button>
+      <button class="primary" id="mobPlayPause" onclick="mobilityToggle()" aria-label="Pausar">⏸</button>
+      <button onclick="mobilityNext()" aria-label="Siguiente">⏭</button>
+    </div>
+    <div id="mobPlayerNext" style="text-align:center;font-size:.76rem;color:var(--muted);margin-top:14px;"></div>
+  </div>
+  <div id="mobPlayerDone" class="hidden" style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:10px;">
+    <div style="font-size:3.5rem;">🧘</div>
+    <div style="font-family:'Bebas Neue',sans-serif;font-size:2rem;color:var(--accent);">¡Rutina completada!</div>
+    <div id="mobDoneSummary" style="font-size:.86rem;color:var(--muted);"></div>
+    <div id="mobDoneStatus" style="font-size:.82rem;margin-top:6px;"></div>
+    <button id="mobDoneRetry" class="sheet-btn hidden" style="max-width:260px;" onclick="saveMobilitySession()">Reintentar guardado</button>
+    <button class="sheet-btn" style="max-width:260px;background:var(--surface);color:var(--text);border:1px solid var(--border);margin-top:6px;" onclick="closeMobilityPlayer()">Cerrar</button>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -553,11 +645,13 @@ function switchTab(name){
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
   document.getElementById('panel-' + name).classList.add('active');
-  document.querySelector(`.tab-btn[data-tab="${name}"]`).classList.add('active');
+  const tabBtn = document.querySelector(`.tab-btn[data-tab="${name === 'calendario' ? 'inicio' : name}"]`);
+  if(tabBtn) tabBtn.classList.add('active');
   if(name === 'inicio') renderInicio();
   if(name === 'progreso') loadProgressExerciseList();
   if(name === 'calendario') renderCalendar();
   if(name === 'suplementos') loadSupplements();
+  if(name === 'movilidad') renderMobility();
 }
 
 // ═══════════════════════════════════════════
@@ -660,7 +754,7 @@ async function loadProgressChart(){
 // DAYS + EXERCISES (estado local, sincronizado con Supabase)
 // ═══════════════════════════════════════════
 let DAYS = []; // [{id, name, day_type, sort_order, exercises:[...], doneToday:bool}]
-const DAY_TYPE_ICON = { gym:'🏋️', football:'⚽', rest:'🚶', custom:'✨' };
+const DAY_TYPE_ICON = { gym:'🏋️', football:'⚽', rest:'🚶', custom:'✨', mobility:'🧘' };
 
 async function loadDays(){
   const { data: days, error } = await sb.from('days').select('*').eq('user_id', currentUser.id).order('sort_order');
@@ -1778,6 +1872,274 @@ async function finishSessionMode(){
 }
 
 // ═══════════════════════════════════════════
+// MOVILIDAD (rutinas guiadas con temporizador)
+// ═══════════════════════════════════════════
+// dbId apunta a data/exercises-es.json para mostrar el GIF cuando existe
+const MOB_POSES = {
+  leg_swing_front: { name:'Balanceo de pierna adelante-atrás', sides:true, cue:'Apóyate en una pared y balancea la pierna estirada adelante y atrás, aumentando el rango de a poco. Tronco quieto.' },
+  leg_swing_side: { name:'Balanceo lateral de pierna', sides:true, cue:'Mirando a la pared, balancea la pierna de lado a lado cruzando por delante del cuerpo. Cadera mirando al frente.' },
+  worlds_greatest: { name:'Gran estiramiento del mundo', sides:true, dbId:'1604', cue:'Zancada larga, mano del mismo lado al suelo junto al pie, codo hacia el tobillo y luego abre el brazo hacia el techo siguiéndolo con la mirada.' },
+  lunge_twist: { name:'Zancada con giro de tronco', sides:false, dbId:'1688', cue:'Da una zancada y gira el tronco hacia la pierna de adelante. Alterna lados caminando, rodilla de atrás cerca del suelo.' },
+  hip_circles: { name:'Círculos de cadera de pie', sides:true, cue:'En un pie, sube la rodilla, ábrela hacia el lado y bájala dibujando un círculo grande. Cambia de dirección a la mitad.' },
+  knee_hug_walk: { name:'Rodilla al pecho caminando', sides:false, cue:'Camina y en cada paso abraza una rodilla contra el pecho, subiendo en punta de pie con la pierna de apoyo.' },
+  inchworm: { name:'Gusano (inchworm)', sides:false, dbId:'1471', cue:'Desde de pie, baja las manos al suelo y camina con ellas hasta plancha. Vuelve caminando con los pies hacia las manos, piernas lo más estiradas posible.' },
+  ankle_rocks: { name:'Rodilla a la pared (tobillo)', sides:true, cue:'Pie a un palmo de la pared, lleva la rodilla a tocarla sin levantar el talón. Ve y vuelve con ritmo; aléjate si es muy fácil.' },
+  squat_reach: { name:'Sentadilla con alcance y giro', sides:false, dbId:'1686', cue:'Baja a sentadilla profunda, y al subir estira un brazo arriba girando el tronco. Alterna lados.' },
+  quad_side: { name:'Cuádriceps acostado de lado', sides:true, dbId:'0613', cue:'De lado, toma el empeine de la pierna de arriba y lleva el talón al glúteo. Empuja la cadera adelante para sentirlo más.' },
+  hamstring_up: { name:'Isquiotibiales con pierna arriba', sides:true, dbId:'1576', cue:'Acostado boca arriba, sube una pierna estirada y tómala detrás del muslo o con una toalla. La otra pierna larga en el suelo.' },
+  hip_flexor: { name:'Flexor de cadera arrodillado', sides:true, dbId:'1564', cue:'Una rodilla en el suelo, el otro pie adelante. Aprieta el glúteo de atrás y lleva la cadera adelante sin arquear la espalda.' },
+  piriformis: { name:'Glúteo y piriforme sentado', sides:true, dbId:'2567', cue:'Sentado, cruza un tobillo sobre la rodilla contraria y lleva el pecho hacia adelante con la espalda recta.' },
+  butterfly: { name:'Mariposa (aductores)', sides:false, cue:'Sentado, junta las plantas de los pies y deja caer las rodillas. Espalda larga, inclínate adelante desde la cadera.' },
+  calf_wall: { name:'Gemelo en la pared', sides:true, dbId:'1377', cue:'Manos en la pared, una pierna atrás estirada con el talón en el suelo. Lleva la cadera hacia la pared.' },
+  soleus_wall: { name:'Sóleo en la pared (rodilla flexionada)', sides:true, dbId:'1407', cue:'Igual que el gemelo, pero dobla la rodilla de atrás manteniendo el talón abajo. Se siente más bajo, cerca del tobillo.' },
+  supine_twist: { name:'Torsión acostado', sides:true, dbId:'3639', cue:'Boca arriba, lleva una rodilla doblada hacia el lado contrario y abre el brazo. Hombros pegados al suelo.' },
+  child: { name:'Postura del niño', sides:false, cue:'De rodillas, siéntate sobre los talones y estira los brazos adelante con la frente al suelo. Respira lento hacia la espalda.' },
+  ninety_ninety: { name:'90/90 de cadera', sides:true, cue:'Sentado con ambas piernas dobladas a 90°, una adelante y otra al lado. Pecho alto, inclínate sobre la pierna de adelante.' },
+  frog: { name:'Rana con balanceo', sides:false, dbId:'2571', cue:'En cuatro apoyos, abre las rodillas lo que puedas con los pies hacia afuera. Balancea la cadera atrás y adelante, suave.' },
+  cossack: { name:'Sentadilla cosaca', sides:false, cue:'Piernas muy abiertas, baja hacia un lado manteniendo la otra pierna estirada con la punta arriba. Alterna lados, despacio.' },
+  deep_squat: { name:'Sentadilla profunda sostenida', sides:false, cue:'Baja lo más que puedas con los talones en el suelo. Codos empujando las rodillas hacia afuera, pecho alto. Agárrate de algo si lo necesitas.' },
+  ankle_circles: { name:'Círculos de tobillo', sides:true, dbId:'1368', cue:'Con el pie en el aire, dibuja círculos grandes con la punta. Cambia de dirección a la mitad.' },
+  toe_heel_walk: { name:'Caminar en puntas y en talones', sides:false, cue:'Camina en puntas de pie la mitad del tiempo y en talones la otra mitad. Pasos cortos y controlados.' },
+  cat_cow: { name:'Gato-vaca', sides:false, cue:'En cuatro apoyos, alterna redondear la espalda (mirando al ombligo) y arquearla (mirando adelante). Lento, con la respiración.' },
+  thread_needle: { name:'Enhebrar la aguja', sides:true, cue:'En cuatro apoyos, pasa un brazo por debajo del cuerpo hasta apoyar el hombro, luego ábrelo hacia el techo.' },
+  open_book: { name:'Libro abierto', sides:true, cue:'Acostado de lado con rodillas dobladas y brazos juntos al frente. Abre el brazo de arriba hasta el otro lado siguiéndolo con la mirada.' },
+  chest_wall: { name:'Pecho y hombro en la pared', sides:true, dbId:'1271', cue:'Apoya el antebrazo en la pared o el marco de una puerta y gira el cuerpo hacia el lado contrario hasta sentir el pecho.' },
+  wall_angels: { name:'Ángeles en la pared', sides:false, cue:'Espalda, cabeza y brazos en la pared en forma de W. Sube y baja los brazos sin despegarlos.' },
+  lat_kneel: { name:'Dorsal arrodillado', sides:false, dbId:'1346', cue:'De rodillas, apoya los antebrazos en una silla o banco y lleva el pecho hacia el suelo, dejando caer la cabeza entre los brazos.' },
+  knees_chest: { name:'Rodillas al pecho acostado', sides:false, cue:'Boca arriba, abraza ambas rodillas y balancéate suave de lado a lado para masajear la espalda baja.' },
+  glute_seated: { name:'Glúteo sentado con torsión', sides:true, dbId:'1424', cue:'Sentado con una pierna estirada, cruza el otro pie por encima y abraza la rodilla hacia el pecho girando el tronco.' },
+  pelvic_bridge: { name:'Inclinación pélvica a puente', sides:false, dbId:'1422', cue:'Boca arriba con rodillas dobladas, aplana la espalda contra el suelo y sube la cadera vértebra por vértebra. Baja igual de lento.' },
+};
+const MOBILITY_ROUTINES = [
+  { id:'pre', icon:'⚡', name:'Pre-partido', kind:'Dinámica', color:'var(--accent3)', desc:'Activa cadera, tobillos y piernas antes de jugar o entrenar.',
+    poses:[['leg_swing_front',30],['leg_swing_side',30],['hip_circles',20],['knee_hug_walk',30],['worlds_greatest',30],['lunge_twist',40],['ankle_rocks',25],['inchworm',40],['squat_reach',30]] },
+  { id:'post', icon:'🌙', name:'Post-partido', kind:'Estática', color:'#a855f7', desc:'Para soltar las piernas después de jugar o del gym.',
+    poses:[['quad_side',40],['hamstring_up',40],['hip_flexor',40],['piriformis',40],['butterfly',45],['calf_wall',30],['supine_twist',30],['child',45]] },
+  { id:'cadera', icon:'🦵', name:'Cadera y aductores', kind:'Mixta', color:'var(--accent)', desc:'Rango de cadera para cambios de dirección, patadas y sentadillas.',
+    poses:[['ninety_ninety',45],['frog',45],['cossack',45],['hip_flexor',45],['glute_seated',40],['deep_squat',60]] },
+  { id:'tobillo', icon:'🦶', name:'Tobillo y pantorrilla', kind:'Mixta', color:'var(--yellow)', desc:'Tobillos más móviles: mejores sentadillas y menos esguinces.',
+    poses:[['ankle_circles',30],['ankle_rocks',40],['calf_wall',40],['soleus_wall',40],['toe_heel_walk',40]] },
+  { id:'hombros', icon:'💪', name:'Hombros y espalda alta', kind:'Mixta', color:'#f97316', desc:'Para presses, dominadas y estar menos encorvado.',
+    poses:[['cat_cow',40],['thread_needle',35],['open_book',35],['chest_wall',30],['wall_angels',40],['lat_kneel',40]] },
+  { id:'espalda', icon:'🧍', name:'Espalda baja', kind:'Suave', color:'#2dd4bf', desc:'Alivio después de estar sentado mucho rato o de un día de piernas.',
+    poses:[['cat_cow',45],['child',45],['knees_chest',40],['supine_twist',40],['glute_seated',35],['pelvic_bridge',40]] },
+  { id:'diario', icon:'🌅', name:'10 minutos diarios', kind:'Cuerpo completo', color:'#ec4899', desc:'Lo básico para todo el cuerpo. Ideal para hacerlo todos los días.',
+    poses:[['cat_cow',40],['worlds_greatest',35],['ninety_ninety',35],['deep_squat',45],['thread_needle',30],['hamstring_up',30],['calf_wall',30],['child',40]] },
+];
+const MOB_PREP_SEC = 5;
+
+function isMobilitySession(s){ return s.day_type === 'mobility' || (s.notes || '').startsWith('Movilidad · '); }
+function mobilitySteps(routine){
+  const steps = [];
+  routine.poses.forEach(([key, sec]) => {
+    const p = MOB_POSES[key];
+    if(p.sides){
+      steps.push({ ...p, key, sec, side:'Lado izquierdo' });
+      steps.push({ ...p, key, sec, side:'Lado derecho' });
+    } else steps.push({ ...p, key, sec, side:null });
+  });
+  return steps;
+}
+function mobilityTotalSec(routine){
+  return mobilitySteps(routine).reduce((acc, s) => acc + s.sec + MOB_PREP_SEC, 0);
+}
+function mobilityMinutes(routine){ return Math.max(1, Math.round(mobilityTotalSec(routine) / 60)); }
+
+async function renderMobility(){
+  const list = document.getElementById('mobilityList');
+  list.innerHTML = MOBILITY_ROUTINES.map(r => `
+    <div class="mob-card" style="border-left-color:${r.color};" onclick="openMobilityRoutine('${r.id}')">
+      <div class="mob-icon">${r.icon}</div>
+      <div style="flex:1;min-width:0;">
+        <div class="mob-name">${r.name}</div>
+        <div class="mob-desc">${r.desc}</div>
+        <div class="mob-meta">${mobilityMinutes(r)} min · ${r.poses.length} ejercicios · ${r.kind}</div>
+      </div>
+      <div style="color:var(--muted);font-size:1.2rem;">›</div>
+    </div>`).join('');
+
+  // racha y semana (solo sesiones de movilidad)
+  const todayStr = localDateStr();
+  const sixtyAgoStr = localDateStr(new Date(Date.now() - 60*86400000));
+  const { data: sessions } = await sb.from('sessions').select('*').eq('user_id', currentUser.id).gte('session_date', sixtyAgoStr).lte('session_date', todayStr);
+  const dates = new Set((sessions||[]).filter(isMobilitySession).map(s => s.session_date));
+  let streak = 0;
+  const cursor = new Date();
+  if(!dates.has(localDateStr(cursor))) cursor.setDate(cursor.getDate() - 1); // la racha sigue viva si hoy todavía no la haces
+  while(dates.has(localDateStr(cursor))){ streak++; cursor.setDate(cursor.getDate() - 1); }
+  const monday = new Date();
+  monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
+  const mondayStr = localDateStr(monday);
+  const weekCount = [...dates].filter(d => d >= mondayStr).length;
+  document.getElementById('mobStreakStat').textContent = streak ? `🔥 ${streak}` : '0';
+  document.getElementById('mobWeekStat').textContent = weekCount;
+  document.getElementById('mobTodayDone').classList.toggle('hidden', !dates.has(todayStr));
+}
+
+let mobSelectedId = null;
+async function openMobilityRoutine(id){
+  const r = MOBILITY_ROUTINES.find(x => x.id === id);
+  if(!r) return;
+  mobSelectedId = id;
+  document.getElementById('mobSheetTitle').textContent = `${r.icon} ${r.name}`;
+  document.getElementById('mobSheetMeta').textContent = `${mobilityMinutes(r)} min · ${r.kind} · ${r.desc}`;
+  document.getElementById('mobSheetList').innerHTML = r.poses.map(([key, sec], i) => {
+    const p = MOB_POSES[key];
+    return `<div class="mob-pose-row">
+      <div class="mob-pose-num">${i+1}</div>
+      <div class="mob-thumb" data-dbid="${p.dbId || ''}">🧘</div>
+      <div style="flex:1;">
+        <div style="font-size:.85rem;font-weight:600;">${p.name}</div>
+        <div class="ex-meta">${sec} s${p.sides ? ' por lado' : ''}</div>
+      </div>
+    </div>`;
+  }).join('');
+  document.getElementById('mobSheetOverlay').classList.add('show');
+  await loadExDb();
+  document.querySelectorAll('#mobSheetList .mob-thumb[data-dbid]').forEach(el => {
+    const item = el.dataset.dbid && EXDB.find(e => e.id === el.dataset.dbid);
+    if(item) el.innerHTML = `<img src="${item.image}" loading="lazy" onerror="this.remove()">`;
+  });
+}
+function closeMobilitySheet(){ document.getElementById('mobSheetOverlay').classList.remove('show'); }
+
+// ── REPRODUCTOR ──
+let mobState = null, mobInterval = null, mobWakeLock = null;
+async function startMobilityRoutine(){
+  const r = MOBILITY_ROUTINES.find(x => x.id === mobSelectedId);
+  if(!r) return;
+  closeMobilitySheet();
+  getAudioCtx(); // desbloquea el audio en iOS al iniciar desde un toque
+  await loadExDb();
+  mobState = { routine:r, steps: mobilitySteps(r), idx:0, phase:'prep', remaining:MOB_PREP_SEC, running:true, startedAt: Date.now() };
+  document.getElementById('mobPlayerMain').classList.remove('hidden');
+  document.getElementById('mobPlayerDone').classList.add('hidden');
+  document.getElementById('mobPlayerOverlay').classList.add('show');
+  try{ if(navigator.wakeLock) mobWakeLock = await navigator.wakeLock.request('screen'); }catch(e){}
+  updateMobilityUI();
+  clearInterval(mobInterval);
+  mobInterval = setInterval(tickMobility, 1000);
+}
+function tickMobility(){
+  const s = mobState;
+  if(!s || !s.running) return;
+  s.remaining--;
+  if(s.phase === 'hold' && s.remaining > 0 && s.remaining <= 3) playBeep(660, 0.08);
+  if(s.remaining <= 0){
+    if(s.phase === 'prep'){
+      s.phase = 'hold';
+      s.remaining = s.steps[s.idx].sec;
+      playBeep(880, 0.15);
+    } else {
+      goToMobilityStep(s.idx + 1);
+      return;
+    }
+  }
+  updateMobilityUI();
+}
+function goToMobilityStep(idx){
+  const s = mobState;
+  if(!s) return;
+  if(idx >= s.steps.length){ finishMobilityRoutine(); return; }
+  s.idx = Math.max(0, idx);
+  // si el siguiente es el otro lado del mismo ejercicio, no hace falta tanta preparación
+  const prev = s.steps[s.idx - 1];
+  const sameExercise = prev && prev.key === s.steps[s.idx].key;
+  s.phase = 'prep';
+  s.remaining = sameExercise ? 3 : MOB_PREP_SEC;
+  playRestEndSound();
+  updateMobilityUI();
+}
+function mobilityPrev(){ if(mobState) goToMobilityStep(mobState.idx - 1); }
+function mobilityNext(){ if(mobState) goToMobilityStep(mobState.idx + 1); }
+function mobilityToggle(){
+  if(!mobState) return;
+  mobState.running = !mobState.running;
+  updateMobilityUI();
+}
+function updateMobilityUI(){
+  const s = mobState;
+  const step = s.steps[s.idx];
+  const next = s.steps[s.idx + 1];
+  document.getElementById('mobPlayerRoutine').textContent = `${s.routine.icon} ${s.routine.name}`;
+  document.getElementById('mobPlayerProgress').style.width = `${(s.idx / s.steps.length) * 100}%`;
+  document.getElementById('mobPlayerCount').textContent = `${s.idx + 1} / ${s.steps.length}`;
+  document.getElementById('mobPlayerName').textContent = step.name;
+  const sideEl = document.getElementById('mobPlayerSide');
+  sideEl.textContent = step.side || '';
+  sideEl.classList.toggle('hidden', !step.side);
+  const badge = document.getElementById('mobPlayerBadge');
+  badge.textContent = s.phase === 'prep' ? 'PREPÁRATE' : 'MANTÉN';
+  badge.className = 'timer-badge ' + (s.phase === 'prep' ? 'rest' : 'work');
+  document.getElementById('mobPlayerDigits').textContent = s.remaining;
+  const total = s.phase === 'prep' ? MOB_PREP_SEC : step.sec;
+  const ring = document.getElementById('mobRingFill');
+  ring.setAttribute('stroke', s.phase === 'prep' ? 'var(--accent3)' : 'var(--accent)');
+  ring.style.strokeDashoffset = CIRC * (1 - Math.min(s.remaining / total, 1));
+  document.getElementById('mobPlayerCue').textContent = step.cue;
+  const gifEl = document.getElementById('mobPlayerGif');
+  const item = step.dbId && EXDB ? EXDB.find(e => e.id === step.dbId) : null;
+  if(item){
+    if(gifEl.dataset.src !== item.gif_url){ gifEl.src = item.gif_url; gifEl.dataset.src = item.gif_url; }
+    gifEl.classList.remove('hidden');
+  } else {
+    gifEl.classList.add('hidden');
+    gifEl.dataset.src = '';
+  }
+  document.getElementById('mobPlayerNext').textContent = next ? `Después: ${next.name}${next.side ? ' · ' + next.side.toLowerCase() : ''}` : 'Último ejercicio';
+  document.getElementById('mobPlayPause').textContent = s.running ? '⏸' : '▶';
+}
+function releaseMobilityWakeLock(){
+  try{ if(mobWakeLock) mobWakeLock.release(); }catch(e){}
+  mobWakeLock = null;
+}
+function closeMobilityPlayer(){
+  if(mobState && !document.getElementById('mobPlayerMain').classList.contains('hidden') && mobState.idx > 0){
+    if(!confirm('¿Salir de la rutina? No se va a registrar.')) return;
+  }
+  clearInterval(mobInterval);
+  mobState = null;
+  releaseMobilityWakeLock();
+  document.getElementById('mobPlayerOverlay').classList.remove('show');
+}
+async function finishMobilityRoutine(){
+  clearInterval(mobInterval);
+  releaseMobilityWakeLock();
+  playSessionDoneSound();
+  const s = mobState;
+  const mins = Math.max(1, Math.round((Date.now() - s.startedAt) / 60000));
+  s.durationMin = mins;
+  document.getElementById('mobPlayerMain').classList.add('hidden');
+  document.getElementById('mobPlayerDone').classList.remove('hidden');
+  document.getElementById('mobPlayerCount').textContent = '';
+  document.getElementById('mobDoneSummary').textContent = `${s.routine.name} · ${mins} min · ${s.routine.poses.length} ejercicios`;
+  await saveMobilitySession();
+}
+async function saveMobilitySession(){
+  const s = mobState;
+  if(!s) return;
+  const status = document.getElementById('mobDoneStatus');
+  const retry = document.getElementById('mobDoneRetry');
+  status.textContent = 'Guardando…';
+  retry.classList.add('hidden');
+  const payload = { user_id: currentUser.id, day_id: null, session_date: localDateStr(), completed: true,
+    day_type: 'mobility', notes: `Movilidad · ${s.routine.name} — ${s.durationMin} min` };
+  let { error } = await sb.from('sessions').insert(payload);
+  // si la base todavía no acepta el tipo 'mobility', se guarda como 'custom' (las notas igual la identifican)
+  if(error && (error.code === '23514' || /check constraint|invalid input value/i.test(error.message || ''))){
+    ({ error } = await sb.from('sessions').insert({ ...payload, day_type:'custom' }));
+  }
+  if(error){
+    console.error(error);
+    status.textContent = '⚠️ No se pudo guardar — revisa tu conexión.';
+    retry.classList.remove('hidden');
+    return;
+  }
+  status.textContent = '✅ Guardada en tu calendario';
+  renderMobility();
+}
+
+// ═══════════════════════════════════════════
 // TOAST
 // ═══════════════════════════════════════════
 let toastTimeout = null;
@@ -1803,7 +2165,8 @@ function escHtml(str){
 let calCurrentMonth = new Date();
 calCurrentMonth.setDate(1);
 let calSessionsCache = {};
-const CAL_TYPE_COLOR = { gym:'var(--accent)', football:'var(--accent3)', rest:'var(--yellow)', custom:'#a855f7' };
+const CAL_TYPE_COLOR = { gym:'var(--accent)', football:'var(--accent3)', rest:'var(--yellow)', custom:'#a855f7', mobility:'#2dd4bf' };
+function sessionIcon(s){ return isMobilitySession(s) ? '🧘' : (DAY_TYPE_ICON[s.day_type] || '✨'); }
 function calShiftMonth(delta){
   calCurrentMonth.setMonth(calCurrentMonth.getMonth() + delta);
   renderCalendar();
@@ -1850,12 +2213,14 @@ async function renderCalendar(){
 // Determina el estado de una fecha: hecho / planificado (pendiente, hoy o futuro) / atrasado (planificado y no cumplido, ya pasó) / sin plan
 function getDateStatus(dateStr, weekday, todayStr){
   const sessions = calSessionsCache[dateStr] || [];
+  const trainSessions = sessions.filter(s => !isMobilitySession(s));
   const plannedDays = DAYS.filter(d => (d.weekdays||[]).includes(weekday));
-  if(sessions.length) return { status:'done', color: CAL_TYPE_COLOR[sessions[0].day_type] || '#a855f7' };
+  if(trainSessions.length) return { status:'done', color: CAL_TYPE_COLOR[trainSessions[0].day_type] || '#a855f7' };
   if(plannedDays.length){
     if(dateStr < todayStr) return { status:'missed', color:'var(--danger)' };
     return { status:'pending', color: CAL_TYPE_COLOR[plannedDays[0].day_type] || '#a855f7' };
   }
+  if(sessions.length) return { status:'done', color: CAL_TYPE_COLOR.mobility };
   return { status:'none', color:null };
 }
 function showCalDay(dateStr){
@@ -1874,7 +2239,7 @@ function showCalDay(dateStr){
     const extraNotes = d ? s.notes : (s.notes && s.notes.includes(' — ') ? s.notes.split(' — ').slice(1).join(' — ') : '');
     html += `<div style="background:var(--card);border:1px solid var(--green);border-radius:10px;padding:10px 12px;margin-bottom:6px;display:flex;align-items:center;gap:10px;">
       <div style="flex:1;">
-        <div style="font-weight:700;font-size:.85rem;color:var(--green);">✅ ${DAY_TYPE_ICON[s.day_type]||'✨'} ${label}</div>
+        <div style="font-weight:700;font-size:.85rem;color:var(--green);">✅ ${sessionIcon(s)} ${label}</div>
         ${extraNotes ? `<div style="font-size:.72rem;color:var(--muted);margin-top:3px;">${extraNotes}</div>` : ''}
       </div>
       <button class="icon-btn" style="flex:none;" onclick="deleteSession('${s.id}','${dateStr}')">🗑</button>
@@ -2272,16 +2637,18 @@ async function renderInicio(){
   const monthEnd = localDateStr(new Date(today.getFullYear(), today.getMonth()+1, 0));
 
   const { data: monthSessions } = await sb.from('sessions').select('*').eq('user_id', currentUser.id).gte('session_date', monthStart).lte('session_date', monthEnd);
+  const monthTrain = (monthSessions||[]).filter(s => !isMobilitySession(s));
   const weekSessions = (monthSessions||[]).filter(s => s.session_date >= weekStartStr && s.session_date <= weekEndStr);
+  const weekTrain = weekSessions.filter(s => !isMobilitySession(s));
 
   // cuántos días distintos de la semana tienen algo planificado
   const plannedThisWeek = new Set();
   weekDates.forEach(d => {
     DAYS.forEach(day => { if((day.weekdays||[]).includes(d.getDay())) plannedThisWeek.add(localDateStr(d)); });
   });
-  const doneThisWeekDates = new Set(weekSessions.map(s => s.session_date));
+  const doneThisWeekDates = new Set(weekTrain.map(s => s.session_date));
   document.getElementById('inicioWeekStat').textContent = `${doneThisWeekDates.size}/${Math.max(plannedThisWeek.size, doneThisWeekDates.size)}`;
-  document.getElementById('inicioMonthStat').textContent = new Set((monthSessions||[]).map(s=>s.session_date)).size;
+  document.getElementById('inicioMonthStat').textContent = new Set(monthTrain.map(s=>s.session_date)).size;
 
   // tira semanal L-D
   const sessByDate = {};
@@ -2292,8 +2659,10 @@ async function renderInicio(){
     calSessionsCache[dateStr] = sessByDate[dateStr] || calSessionsCache[dateStr] || [];
     const daySessions = calSessionsCache[dateStr];
     const plannedDays = DAYS.filter(dd => (dd.weekdays||[]).includes(d.getDay()));
-    const dayTypeForIcon = daySessions.length ? daySessions[0].day_type : (plannedDays.length ? plannedDays[0].day_type : null);
-    const dayIcon = dayTypeForIcon ? (DAY_TYPE_ICON[dayTypeForIcon] || '✨') : '';
+    const firstTrain = daySessions.find(s => !isMobilitySession(s));
+    const dayIcon = firstTrain ? sessionIcon(firstTrain)
+      : plannedDays.length ? (DAY_TYPE_ICON[plannedDays[0].day_type] || '✨')
+      : daySessions.length ? '🧘' : '';
     const st = getDateStatus(dateStr, d.getDay(), todayStr);
     const isToday = dateStr === todayStr;
     let style = 'background:var(--card);color:var(--muted);border:1px solid var(--border);';
