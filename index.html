@@ -269,6 +269,7 @@
       <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:14px;">
         <canvas id="progressCanvas" height="180"></canvas>
       </div>
+      <div id="progressRecordLine" style="font-size:.8rem;margin-bottom:12px;"></div>
       <table style="width:100%;border-collapse:collapse;font-size:.78rem;">
         <thead><tr style="color:var(--muted);text-align:left;border-bottom:1px solid var(--border);">
           <th style="padding:6px 4px;">Fecha</th><th style="padding:6px 4px;">Serie</th><th style="padding:6px 4px;">Peso</th><th style="padding:6px 4px;">Reps</th>
@@ -276,6 +277,7 @@
         <tbody id="progressTableBody"></tbody>
       </table>
     </div>
+    <div id="recordsBox"></div>
   </div>
 
   <!-- TAB: CALENDARIO -->
@@ -447,7 +449,7 @@
 <div class="sheet-overlay" id="exDbOverlay" onclick="if(event.target===this)closeExDb()">
   <div class="sheet">
     <div class="sheet-head"><h3>🔍 Base de datos</h3><button class="icon-btn" onclick="closeExDb()">✕</button></div>
-    <input type="text" id="exDbSearch" placeholder="Buscar por nombre (en inglés)..." oninput="renderExDbResults()">
+    <input type="text" id="exDbSearch" placeholder="Buscar: sentadilla, press banca, remo..." oninput="renderExDbResults()">
     <div style="display:flex;gap:8px;margin-bottom:10px;">
       <select id="exDbCategory" onchange="renderExDbResults()"></select>
       <select id="exDbEquipment" onchange="renderExDbResults()"></select>
@@ -570,6 +572,17 @@
     <div id="mobDoneStatus" style="font-size:.82rem;margin-top:6px;"></div>
     <button id="mobDoneRetry" class="sheet-btn hidden" style="max-width:260px;" onclick="saveMobilitySession()">Reintentar guardado</button>
     <button class="sheet-btn" style="max-width:260px;background:var(--surface);color:var(--text);border:1px solid var(--border);margin-top:6px;" onclick="closeMobilityPlayer()">Cerrar</button>
+  </div>
+</div>
+
+<!-- RESUMEN DE SESIÓN -->
+<div class="sheet-overlay" id="summaryOverlay" onclick="if(event.target===this)closeSessionSummary()">
+  <div class="sheet">
+    <div id="summaryBody"></div>
+    <div style="display:flex;gap:8px;">
+      <button class="sheet-btn" style="background:var(--surface);color:var(--text);border:1px solid var(--border);" onclick="shareSessionSummary()">📤 Compartir</button>
+      <button class="sheet-btn" onclick="closeSessionSummary()">Listo</button>
+    </div>
   </div>
 </div>
 
@@ -708,6 +721,7 @@ function loadProgressExerciseList(){
   }).join('');
   document.querySelectorAll('#progressMetricPick button').forEach(b => b.classList.toggle('active', b.dataset.metric === progressMetric));
   if(PROGRESS_GROUPS[prevVal]){ sel.value = prevVal; loadProgressChart(); }
+  renderRecords();
 }
 const PROGRESS_METRIC_LABEL = { weight:'Peso máx (kg)', reps:'Reps totales', volume:'Volumen (kg × reps)' };
 async function loadProgressChart(){
@@ -762,6 +776,11 @@ async function loadProgressChart(){
     }
   });
 
+  const best = bestOfLogs(logs);
+  const best1RM = Math.max(0, ...logs.map(l => estimate1RM(l.weight, l.reps) || 0));
+  document.getElementById('progressRecordLine').innerHTML = best
+    ? `🏆 <b style="color:var(--yellow);">Récord: ${fmtRecord(best)}</b> <span style="color:var(--muted);">· ${best.date}${best1RM ? ` · 1RM estimado ${best1RM} kg` : ''}</span>`
+    : '';
   const tbody = document.getElementById('progressTableBody');
   tbody.innerHTML = logs.slice().reverse().map(l => `
     <tr style="border-bottom:1px solid var(--border);">
@@ -1345,9 +1364,10 @@ async function saveSet(exId, serieNum){
   if(!w && !r) return;
   const err = await upsertTodaySetLog(exId, serieNum, w, r);
   if(err){ showSaveError(err); return; }
+  checkLivePR(exId, w, r);
   const btn = document.getElementById(`save-${exId}-${serieNum}`);
   btn.classList.add('saved');
-  showToast('✅ Serie guardada');
+  if(!document.getElementById('toast').textContent.startsWith('🏆') || !document.getElementById('toast').classList.contains('show')) showToast('✅ Serie guardada');
   updateExerciseCompletionBadge(exId);
 }
 function updateExerciseCompletionBadge(exId){
@@ -1370,14 +1390,20 @@ function readSetInput(exId, serieNum, prefix){
   const rEl = document.getElementById(`${prefix}r-${exId}-${serieNum}`);
   return { w: wEl ? wEl.value : '', r: rEl ? rEl.value : '' };
 }
+// lee la serie desde donde estás anotando: si el modo sesión está abierto manda lo que escribiste ahí,
+// no lo precargado en la pestaña Rutina
+function readSetForSave(exId, serieNum){
+  const inSession = document.getElementById('sessionModeOverlay').classList.contains('show');
+  const main = readSetInput(exId, serieNum, inSession ? 'sm-' : '');
+  const other = readSetInput(exId, serieNum, inSession ? '' : 'sm-');
+  return { w: main.w || (main.r ? '' : other.w), r: main.r || (main.w ? '' : other.r) };
+}
 async function autoMarkSet(exId, serieNum){
-  const a = readSetInput(exId, serieNum, '');
-  const b = readSetInput(exId, serieNum, 'sm-');
-  const w = a.w || b.w;
-  const r = a.r || b.r;
+  const { w, r } = readSetForSave(exId, serieNum);
   if(w || r){
     const err = await upsertTodaySetLog(exId, serieNum, w, r);
     if(err){ showSaveError(err); return false; }
+    checkLivePR(exId, w, r);
   }
   const saveBtn1 = document.getElementById(`save-${exId}-${serieNum}`);
   const saveBtn2 = document.getElementById(`sm-save-${exId}-${serieNum}`);
@@ -1518,9 +1544,8 @@ async function autoSaveUnsavedSets(dayId){
       const b2 = document.getElementById(`sm-save-${ex.id}-${i}`);
       const alreadySaved = (b1 && b1.classList.contains('saved')) || (b2 && b2.classList.contains('saved'));
       if(alreadySaved) continue;
-      const a = readSetInput(ex.id, i, '');
-      const b = readSetInput(ex.id, i, 'sm-');
-      if(a.w || a.r || b.w || b.r){
+      const v = readSetForSave(ex.id, i);
+      if(v.w || v.r){
         if(!(await autoMarkSet(ex.id, i))) allOk = false;
       }
     }
@@ -1549,10 +1574,10 @@ async function toggleSessionDone(dayId){
     const { data: newSession, error } = await sb.from('sessions').insert({ user_id: currentUser.id, day_id: dayId, session_date: todayStr, day_type: d.day_type, completed: true }).select().single();
     if(error){ showSaveError(error); return; }
     if(newSession) await linkTodaySetLogsToSession(dayId, newSession.id);
-    showToast('🔥 ¡Sesión registrada!');
   }
   await loadDays();
   document.getElementById('daybody-' + dayId).classList.add('open');
+  if(!d.doneToday){ playSessionDoneSound(); await showSessionSummary(dayId); }
 }
 
 // ═══════════════════════════════════════════
@@ -1619,11 +1644,36 @@ function translateExName(name){
   s = s.trim().replace(/\s+/g,' ');
   return s.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
 }
+const EXDB_CATEGORY_ES = { 'upper arms':'Brazos', 'upper legs':'Piernas', 'back':'Espalda', 'waist':'Abdomen', 'chest':'Pecho',
+  'shoulders':'Hombros', 'lower legs':'Pantorrillas', 'lower arms':'Antebrazos', 'cardio':'Cardio', 'neck':'Cuello' };
+const EXDB_EQUIPMENT_ES = { 'body weight':'Peso corporal', 'dumbbell':'Mancuernas', 'cable':'Polea', 'barbell':'Barra', 'leverage machine':'Máquina de palanca',
+  'band':'Banda', 'smith machine':'Máquina Smith', 'kettlebell':'Pesa rusa', 'weighted':'Con peso', 'stability ball':'Balón suizo', 'ez barbell':'Barra EZ',
+  'assisted':'Asistido', 'sled machine':'Máquina trineo', 'medicine ball':'Balón medicinal', 'rope':'Cuerda', 'roller':'Rodillo', 'resistance band':'Banda de resistencia',
+  'bosu ball':'Bosu', 'olympic barbell':'Barra olímpica', 'wheel roller':'Rueda abdominal', 'trap bar':'Barra hexagonal', 'stationary bike':'Bicicleta estática',
+  'elliptical machine':'Elíptica', 'skierg machine':'SkiErg', 'stepmill machine':'Escaladora', 'upper body ergometer':'Ergómetro de brazos', 'hammer':'Martillo', 'tire':'Neumático' };
+// sin tildes ni mayúsculas, para comparar búsquedas
+function normText(str){ return String(str || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''); }
+// palabras que la gente busca en español y que el diccionario de traducción no cubre
+const EXDB_SEARCH_SYNONYMS = {
+  gemelo:['calf'], gemelos:['calf'], estiramiento:['stretch'], estiramientos:['stretch'], elongacion:['stretch'], estirar:['stretch'],
+  isquio:['hamstring'], isquios:['hamstring'], femoral:['hamstring','leg curl'], movilidad:['stretch','circles','rotation'],
+  dorsales:['lat'], gluteos:['glute'], abs:['abs','crunch'], abdominales:['abs','crunch'], polea:['cable'], cuadriceps:['quad'],
+};
+function exDbWordMatches(item, w){
+  if(item.search.includes(w)) return true;
+  if(w.length > 3 && w.endsWith('s') && item.search.includes(w.slice(0, -1))) return true; // plural: "fondos" → "fondo"
+  return (EXDB_SEARCH_SYNONYMS[w] || []).some(syn => item.search.includes(syn));
+}
 let EXDB = null;
 async function loadExDb(){
   if(EXDB) return EXDB;
   try{ const r = await fetch('data/exercises-es.json'); EXDB = await r.json(); }
   catch(e){ console.error('No se pudo cargar data/exercises-es.json', e); EXDB = []; }
+  // nombre en español + texto de búsqueda (español, inglés, zona, equipo y músculo) calculados una sola vez
+  EXDB.forEach(e => {
+    e.name_es = translateExName(e.name);
+    e.search = normText([e.name_es, e.name, EXDB_CATEGORY_ES[e.category], EXDB_EQUIPMENT_ES[e.equipment], e.target, translateExName(e.target || '')].join(' '));
+  });
   return EXDB;
 }
 async function openExDb(){
@@ -1633,9 +1683,9 @@ async function openExDb(){
   const eqSel = document.getElementById('exDbEquipment');
   if(catSel.options.length === 0){
     const cats = [...new Set(EXDB.map(e=>e.category))].sort();
-    catSel.innerHTML = '<option value="">Todas las zonas</option>' + cats.map(c=>`<option value="${c}">${c}</option>`).join('');
-    const eqs = [...new Set(EXDB.map(e=>e.equipment))].sort();
-    eqSel.innerHTML = '<option value="">Todo equipo</option>' + eqs.map(e=>`<option value="${e}">${e}</option>`).join('');
+    catSel.innerHTML = '<option value="">Todas las zonas</option>' + cats.map(c=>`<option value="${c}">${EXDB_CATEGORY_ES[c] || c}</option>`).join('');
+    const eqs = [...new Set(EXDB.map(e=>e.equipment))].sort((a,b) => (EXDB_EQUIPMENT_ES[a]||a).localeCompare(EXDB_EQUIPMENT_ES[b]||b, 'es'));
+    eqSel.innerHTML = '<option value="">Todo equipo</option>' + eqs.map(e=>`<option value="${e}">${EXDB_EQUIPMENT_ES[e] || e}</option>`).join('');
   }
   document.getElementById('exDbSearch').value = '';
   renderExDbResults();
@@ -1644,25 +1694,25 @@ async function openExDb(){
 function closeExDb(){ document.getElementById('exDbOverlay').classList.remove('show'); }
 function renderExDbResults(){
   if(!EXDB) return;
-  const q = document.getElementById('exDbSearch').value.toLowerCase().trim();
+  const words = normText(document.getElementById('exDbSearch').value).split(/\s+/).filter(Boolean);
   const cat = document.getElementById('exDbCategory').value;
   const eq = document.getElementById('exDbEquipment').value;
   let results = EXDB;
-  if(q) results = results.filter(e => e.name.toLowerCase().includes(q));
+  if(words.length) results = results.filter(e => words.every(w => exDbWordMatches(e, w)));
   if(cat) results = results.filter(e => e.category === cat);
   if(eq) results = results.filter(e => e.equipment === eq);
   results = results.slice(0, 40);
   const box = document.getElementById('exDbResults');
   if(!results.length){
-    box.innerHTML = `<div class="empty-state">Sin resultados — prueba otro término (nombres en inglés)</div>`;
+    box.innerHTML = `<div class="empty-state">Sin resultados — prueba con otra palabra (ej: "remo", "bíceps", "mancuerna")</div>`;
     return;
   }
   box.innerHTML = results.map(e => `
     <div class="exdb-card" onclick="addExerciseFromDb('${e.id}')">
       <img class="exdb-thumb" src="${e.image}" loading="lazy" onerror="this.style.display='none'">
       <div style="flex:1;">
-        <div class="exdb-name">${translateExName(e.name)}</div>
-        <div class="exdb-meta">${e.category} · ${e.equipment} · <span style="opacity:.6">${e.name}</span></div>
+        <div class="exdb-name">${e.name_es}</div>
+        <div class="exdb-meta">${EXDB_CATEGORY_ES[e.category] || e.category} · ${EXDB_EQUIPMENT_ES[e.equipment] || e.equipment} · <span style="opacity:.6">${e.name}</span></div>
       </div>
       <button class="exdb-add" onclick="event.stopPropagation();addExerciseFromDb('${e.id}')">＋</button>
     </div>
@@ -1827,6 +1877,7 @@ function resetTimerCues(){
 let sessionModeDayId = null;
 async function openSessionMode(dayId){
   sessionModeDayId = dayId;
+  rememberSessionStart(dayId);
   const d = DAYS.find(x => x.id === dayId);
   if(!d) return;
   document.getElementById('sessionModeTitle').textContent = `${DAY_TYPE_ICON[d.day_type]||''} ${d.name}${d.exercises.length ? ' · ' + durationLabel(d) : ''}`;
@@ -1907,8 +1958,9 @@ async function saveSetSession(exId, serieNum){
   if(!w && !r) return;
   const err = await upsertTodaySetLog(exId, serieNum, w, r);
   if(err){ showSaveError(err); return; }
+  checkLivePR(exId, w, r);
   document.getElementById(`sm-save-${exId}-${serieNum}`).classList.add('saved');
-  showToast('✅ Serie guardada');
+  if(!document.getElementById('toast').textContent.startsWith('🏆') || !document.getElementById('toast').classList.contains('show')) showToast('✅ Serie guardada');
   updateExerciseCompletionBadge(exId);
 }
 async function finishSessionMode(){
@@ -1920,10 +1972,10 @@ async function finishSessionMode(){
   const { data: newSession, error } = await sb.from('sessions').insert({ user_id: currentUser.id, day_id: d.id, session_date: todayStr, day_type: d.day_type, completed: true }).select().single();
   if(error){ showSaveError(error); return; }
   if(newSession) await linkTodaySetLogsToSession(d.id, newSession.id);
-  playSessionDoneSound();
-  showToast('🔥 ¡Sesión completada!');
   closeSessionMode();
   await loadDays();
+  playSessionDoneSound();
+  await showSessionSummary(d.id);
 }
 
 // ═══════════════════════════════════════════
@@ -2423,6 +2475,193 @@ async function saveMobilitySession(){
   }
   status.textContent = '✅ Guardada en tu calendario';
   renderMobility();
+}
+
+// ═══════════════════════════════════════════
+// RÉCORDS PERSONALES
+// ═══════════════════════════════════════════
+// 1RM estimado (Epley); solo confiable hasta ~12 reps
+function estimate1RM(w, r){ return (w && r && r <= 12) ? Math.round(w * (1 + r / 30) * 10) / 10 : null; }
+// ids de ejercicio de todos los días que comparten el mismo ejercicio
+function idsForKey(key){
+  const ids = [];
+  DAYS.forEach(d => d.exercises.forEach(ex => { if(progressKey(ex) === key) ids.push(ex.id); }));
+  return ids;
+}
+function keyForExerciseId(exId){ const ex = findExercise(exId); return ex ? progressKey(ex) : null; }
+// mejor marca dentro de una lista de logs: más peso; a igual peso, más reps. Sin peso (peso corporal) cuentan las reps
+function bestOfLogs(logs){
+  let best = null;
+  logs.forEach(l => {
+    const w = l.weight || 0, r = l.reps || 0;
+    if(!w && !r) return;
+    if(!best || w > best.weight || (w === best.weight && r > best.reps)){
+      best = { weight:w, reps:r, date: localDateStr(new Date(l.logged_at)) };
+    }
+  });
+  return best;
+}
+function beatsRecord(newW, newR, prev){
+  if(!prev) return false;
+  newW = newW || 0; newR = newR || 0;
+  if(prev.weight > 0) return newW > prev.weight;
+  return newW > 0 || newR > prev.reps; // ejercicios con peso corporal: récord de reps
+}
+function fmtRecord(b){
+  if(!b) return '—';
+  return b.weight ? `${b.weight} kg × ${b.reps || '?'}` : `${b.reps} reps`;
+}
+
+// récord vigente ANTES de hoy por ejercicio (para avisar en vivo al guardar una serie)
+const PR_BASELINE = {};   // key -> best | null
+const PR_CELEBRATED = {}; // key -> { weight, reps } ya celebrado hoy
+async function getPrBaseline(key){
+  if(key in PR_BASELINE) return PR_BASELINE[key];
+  const ids = idsForKey(key);
+  if(!ids.length) return null;
+  const { startISO } = todayRangeISO();
+  const { data, error } = await sb.from('set_logs').select('weight,reps,logged_at').in('exercise_id', ids).lt('logged_at', startISO);
+  if(error) return null; // sin conexión: no se cachea, se reintenta en la próxima serie
+  PR_BASELINE[key] = bestOfLogs(data || []);
+  return PR_BASELINE[key];
+}
+async function checkLivePR(exId, w, r){
+  const ex = findExercise(exId);
+  if(!ex || (ex.category || 'strength') !== 'strength') return;
+  const key = progressKey(ex);
+  const prev = await getPrBaseline(key);
+  const wNum = w ? parseFloat(w) : 0, rNum = r ? parseInt(r) : 0;
+  if(!beatsRecord(wNum, rNum, prev)) return;
+  const done = PR_CELEBRATED[key];
+  if(done && !beatsRecord(wNum, rNum, done)) return;
+  PR_CELEBRATED[key] = { weight:wNum, reps:rNum };
+  playSessionDoneSound();
+  showToast(`🏆 ¡Nuevo récord en ${ex.name}! ${fmtRecord({ weight:wNum, reps:rNum })}`);
+}
+
+// lista de récords en la pestaña Progreso
+async function renderRecords(){
+  const box = document.getElementById('recordsBox');
+  const keys = Object.keys(PROGRESS_GROUPS);
+  if(!keys.length){ box.innerHTML = ''; return; }
+  const allIds = keys.flatMap(k => PROGRESS_GROUPS[k].ids);
+  const { data, error } = await sb.from('set_logs').select('exercise_id,weight,reps,logged_at').in('exercise_id', allIds);
+  if(error){ box.innerHTML = ''; return; }
+  const idToKey = {};
+  keys.forEach(k => PROGRESS_GROUPS[k].ids.forEach(id => idToKey[id] = k));
+  const logsByKey = {};
+  (data || []).forEach(l => { const k = idToKey[l.exercise_id]; if(k) (logsByKey[k] = logsByKey[k] || []).push(l); });
+  const rows = keys.map(k => {
+    const logs = logsByKey[k] || [];
+    const best = bestOfLogs(logs);
+    if(!best) return null;
+    const best1RM = Math.max(0, ...logs.map(l => estimate1RM(l.weight, l.reps) || 0));
+    return { k, label: PROGRESS_GROUPS[k].label, best, best1RM };
+  }).filter(Boolean).sort((a,b) => b.best.date.localeCompare(a.best.date));
+  if(!rows.length){ box.innerHTML = ''; return; }
+  const fmtDate = d => new Date(d + 'T00:00:00').toLocaleDateString('es-CL', { day:'numeric', month:'short' });
+  const recentLimit = localDateStr(new Date(Date.now() - 7*86400000));
+  box.innerHTML = `<div style="font-size:.72rem;color:var(--muted);letter-spacing:1px;text-transform:uppercase;margin:18px 0 8px;">🏆 Mis récords</div>
+    <div class="day-card" style="padding:4px 14px;">` +
+    rows.map((row, i) => `
+      <div data-key="${escHtml(row.k)}" onclick="selectProgressKey(this.dataset.key)" style="display:flex;align-items:center;gap:10px;padding:10px 0;cursor:pointer;${i < rows.length-1 ? 'border-bottom:1px solid var(--border);' : ''}">
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:.84rem;font-weight:600;">${escHtml(row.label)} ${row.best.date >= recentLimit ? '<span style="font-size:.66rem;background:rgba(234,179,8,.15);color:var(--yellow);border-radius:10px;padding:1px 7px;margin-left:4px;">NUEVO</span>' : ''}</div>
+          <div style="font-size:.72rem;color:var(--muted);">${fmtDate(row.best.date)}${row.best1RM ? ` · 1RM estimado ${row.best1RM} kg` : ''}</div>
+        </div>
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:1.2rem;color:var(--yellow);white-space:nowrap;">${fmtRecord(row.best)}</div>
+      </div>`).join('') + `</div>`;
+}
+function selectProgressKey(key){
+  const sel = document.getElementById('progressExSelect');
+  sel.value = key;
+  loadProgressChart();
+  window.scrollTo({ top:0, behavior:'smooth' });
+}
+
+// ═══════════════════════════════════════════
+// RESUMEN AL TERMINAR LA SESIÓN
+// ═══════════════════════════════════════════
+function sessionStartKey(dayId){ return `session_start_${dayId}_${localDateStr()}`; }
+function rememberSessionStart(dayId){
+  try{ if(!localStorage.getItem(sessionStartKey(dayId))) localStorage.setItem(sessionStartKey(dayId), String(Date.now())); }catch(e){}
+}
+let lastSummaryText = '';
+async function showSessionSummary(dayId){
+  const d = DAYS.find(x => x.id === dayId);
+  if(!d) return;
+  const strength = d.exercises.filter(ex => (ex.category || 'strength') === 'strength');
+  const { startISO, endISO } = todayRangeISO();
+  const ids = d.exercises.map(e => e.id);
+  const { data: todayRaw } = ids.length
+    ? await sb.from('set_logs').select('*').in('exercise_id', ids).gte('logged_at', startISO).lt('logged_at', endISO)
+    : { data: [] };
+  // una fila por serie (la última guardada)
+  const bySerie = {};
+  (todayRaw || []).forEach(l => {
+    const k = `${l.exercise_id}|${l.serie_number}`;
+    if(!bySerie[k] || l.logged_at > bySerie[k].logged_at) bySerie[k] = l;
+  });
+  const todayLogs = Object.values(bySerie);
+  const strengthIds = new Set(strength.map(e => e.id));
+  const strengthLogs = todayLogs.filter(l => strengthIds.has(l.exercise_id));
+  const volume = Math.round(strengthLogs.reduce((acc, l) => acc + (l.weight || 0) * (l.reps || 0), 0));
+  const exercisesDone = new Set(todayLogs.map(l => l.exercise_id)).size;
+
+  // duración: desde que abriste el modo sesión o tu primera serie de hoy (lo que pasó antes)
+  let startMs = null;
+  try{ const v = localStorage.getItem(sessionStartKey(dayId)); if(v) startMs = Number(v); }catch(e){}
+  todayRaw && todayRaw.forEach(l => { const t = new Date(l.logged_at).getTime(); if(!startMs || t < startMs) startMs = t; });
+  const durMin = startMs ? Math.max(1, Math.round((Date.now() - startMs) / 60000)) : null;
+
+  // récords: hoy vs lo mejor antes de hoy, por ejercicio
+  const prs = [];
+  for(const ex of strength){
+    const exLogs = strengthLogs.filter(l => l.exercise_id === ex.id);
+    const todayBest = bestOfLogs(exLogs);
+    if(!todayBest) continue;
+    const key = progressKey(ex);
+    const prev = await getPrBaseline(key);
+    if(beatsRecord(todayBest.weight, todayBest.reps, prev)) prs.push({ name: ex.name, now: todayBest, prev });
+  }
+
+  const durTxt = durMin == null ? '—' : durMin < 60 ? `${durMin} min` : `${Math.floor(durMin/60)} h ${durMin%60} min`;
+  const stat = (val, label, color) => `<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:12px;text-align:center;">
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:1.7rem;color:${color};line-height:1.1;">${val}</div>
+      <div style="font-size:.68rem;color:var(--muted);text-transform:uppercase;">${label}</div></div>`;
+  document.getElementById('summaryBody').innerHTML = `
+    <div style="text-align:center;margin-bottom:14px;">
+      <div style="font-size:2.8rem;">${prs.length ? '🏆' : '🔥'}</div>
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:1.9rem;color:var(--accent);">¡Sesión completada!</div>
+      <div style="font-size:.84rem;color:var(--muted);">${DAY_TYPE_ICON[d.day_type] || ''} ${escHtml(d.name)}</div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px;">
+      ${stat(durTxt, 'Duración', 'var(--text)')}
+      ${stat(strengthLogs.length, 'Series', 'var(--accent)')}
+      ${stat(volume ? volume.toLocaleString('es-CL') + ' kg' : '—', 'Volumen', 'var(--accent3)')}
+      ${stat(`${exercisesDone}/${d.exercises.length}`, 'Ejercicios', 'var(--text)')}
+    </div>
+    ${prs.length ? `<div style="background:rgba(234,179,8,.08);border:1px solid var(--yellow);border-radius:12px;padding:12px;margin-bottom:14px;">
+      <div style="font-weight:700;color:var(--yellow);font-size:.86rem;margin-bottom:6px;">🏆 ${prs.length === 1 ? 'Nuevo récord' : prs.length + ' récords nuevos'}</div>
+      ${prs.map(p => `<div style="font-size:.82rem;padding:3px 0;">${escHtml(p.name)}: <b>${fmtRecord(p.now)}</b> <span style="color:var(--muted);">(antes ${fmtRecord(p.prev)})</span></div>`).join('')}
+    </div>` : ''}`;
+  lastSummaryText = [
+    `💪 ${d.name}`,
+    durMin != null ? `⏱ ${durTxt}` : null,
+    `${strengthLogs.length} series${volume ? ` · ${volume.toLocaleString('es-CL')} kg de volumen` : ''}`,
+    ...prs.map(p => `🏆 Récord en ${p.name}: ${fmtRecord(p.now)}`),
+    '— EntrenoMassa',
+  ].filter(Boolean).join('\n');
+  document.getElementById('toast').classList.remove('show');
+  document.getElementById('summaryOverlay').classList.add('show');
+}
+function closeSessionSummary(){ document.getElementById('summaryOverlay').classList.remove('show'); }
+async function shareSessionSummary(){
+  try{
+    if(navigator.share){ await navigator.share({ text: lastSummaryText }); return; }
+    await navigator.clipboard.writeText(lastSummaryText);
+    showToast('📋 Resumen copiado');
+  }catch(e){ /* el usuario canceló */ }
 }
 
 // ═══════════════════════════════════════════
