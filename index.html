@@ -43,7 +43,7 @@
 
   /* TABS */
   #tabbar{display:flex;position:fixed;bottom:0;left:0;right:0;margin:0 auto;width:100%;max-width:480px;background:var(--card);border-top:1px solid var(--border);z-index:50;}
-  .tab-btn{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;padding:10px 0 8px;background:none;border:none;color:var(--muted);font-size:.66rem;}
+  .tab-btn{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:2px;padding:10px 0 8px;background:none;border:none;color:var(--muted);font-size:.62rem;}
   .tab-btn .ic{font-size:1.15rem;}
   .tab-btn.active{color:var(--accent);}
   .tab-panel{display:none;padding:0 16px 16px;}
@@ -157,6 +157,9 @@
   .mob-pose-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);}
   .mob-thumb{width:36px;height:36px;border-radius:8px;background:var(--surface);display:flex;align-items:center;justify-content:center;font-size:1rem;flex-shrink:0;overflow:hidden;opacity:.9;}
   .mob-thumb img{width:100%;height:100%;object-fit:cover;background:#fff;}
+  .cb-picker{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0;}
+  .cb-picker button{background:var(--surface);border:1px solid var(--border);color:var(--text);border-radius:16px;padding:7px 11px;font-size:.76rem;}
+  .cb-picker button:active{border-color:var(--accent);color:var(--accent);}
   .mob-test-row{display:flex;align-items:center;gap:10px;padding:9px 0;border-top:1px solid var(--border);cursor:pointer;}
   .mob-pose-num{width:22px;text-align:center;font-family:'Bebas Neue',sans-serif;font-size:1.1rem;color:var(--muted);flex-shrink:0;}
   #mobPlayerOverlay{display:none;position:fixed;top:0;bottom:0;left:0;right:0;margin:0 auto;width:100%;max-width:480px;z-index:999;background:var(--bg);flex-direction:column;padding:16px 20px 24px;overflow-y:auto;}
@@ -235,6 +238,19 @@
     <button class="add-btn" onclick="openAddDay()">＋ Agregar día</button>
     <button class="add-btn" style="border-style:solid;border-color:var(--accent3);color:var(--accent3);margin-top:8px;" onclick="loadSuggestedRoutine2()">⚡ Cargar rutina sugerida — empuje/pierna/tirón/potencia</button>
     <button class="add-btn" style="border-style:solid;border-color:#a855f7;color:#a855f7;margin-top:8px;" onclick="openGenRoutine()">🎯 Generar mi rutina (responde 3 preguntas)</button>
+  </div>
+
+  <!-- TAB: CIRCUITOS -->
+  <div class="tab-panel" id="panel-circuitos">
+    <div class="day-card" style="padding:14px;margin-bottom:14px;">
+      <div style="font-weight:700;font-size:.95rem;">⚡ Circuitos por rondas</div>
+      <div style="font-size:.78rem;color:var(--muted);margin-top:4px;line-height:1.45;">Haces todos los ejercicios seguidos con poco descanso, y después repites la vuelta completa. La app te va marcando el tiempo.</div>
+      <div id="circuitWeekStat" style="font-size:.8rem;color:var(--yellow);font-weight:700;margin-top:8px;"></div>
+    </div>
+    <div style="font-size:.72rem;color:var(--muted);letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;">Mis circuitos</div>
+    <div id="myCircuitList" style="margin-bottom:16px;"></div>
+    <div style="font-size:.72rem;color:var(--muted);letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;">Sugeridos</div>
+    <div id="circuitPresetList"></div>
   </div>
 
   <!-- TAB: MOVILIDAD -->
@@ -317,6 +333,7 @@
 <div id="tabbar" class="hidden">
   <button class="tab-btn active" data-tab="inicio" onclick="switchTab('inicio')"><span class="ic">🏠</span>Inicio</button>
   <button class="tab-btn" data-tab="rutina" onclick="switchTab('rutina')"><span class="ic">🏋️</span>Rutina</button>
+  <button class="tab-btn" data-tab="circuitos" onclick="switchTab('circuitos')"><span class="ic">⚡</span>Circuitos</button>
   <button class="tab-btn" data-tab="movilidad" onclick="switchTab('movilidad')"><span class="ic">🧘</span>Movilidad</button>
   <button class="tab-btn" data-tab="progreso" onclick="switchTab('progreso')"><span class="ic">📈</span>Progreso</button>
   <button class="tab-btn" data-tab="suplementos" onclick="switchTab('suplementos')"><span class="ic">✅</span>Hábitos</button>
@@ -510,6 +527,42 @@
   </div>
 </div>
 
+<!-- CIRCUITOS: DETALLE -->
+<div class="sheet-overlay" id="circuitSheetOverlay" onclick="if(event.target===this)closeCircuitSheet()">
+  <div class="sheet">
+    <div class="sheet-head"><h3 id="circuitSheetTitle"></h3><button class="icon-btn" onclick="closeCircuitSheet()">✕</button></div>
+    <div id="circuitSheetMeta"></div>
+    <div id="circuitSheetList" style="margin:6px 0 16px;"></div>
+    <div style="display:flex;gap:8px;">
+      <button class="sheet-btn" id="circuitEditBtn" style="flex:1;background:var(--surface);color:var(--text);border:1px solid var(--border);" onclick="openCircuitBuilder(circuitSelectedId)">✎ Editar</button>
+      <button class="sheet-btn" style="flex:2;padding:13px;font-size:.9rem;" onclick="startCircuit()">▶ Empezar</button>
+    </div>
+  </div>
+</div>
+
+<!-- CIRCUITOS: CREAR / EDITAR -->
+<div class="sheet-overlay" id="circuitBuilderOverlay">
+  <div class="sheet">
+    <div class="sheet-head"><h3 id="cbTitle">＋ Nuevo circuito</h3><button class="icon-btn" onclick="closeCircuitBuilder()">✕</button></div>
+    <div style="display:flex;gap:8px;">
+      <input type="text" id="cbIcon" maxlength="4" style="width:64px;text-align:center;flex-shrink:0;" placeholder="⚡">
+      <input type="text" id="cbName" placeholder="Nombre (ej: Circuito del martes)" style="flex:1;">
+    </div>
+    <div id="cbSettings" style="margin-bottom:8px;"></div>
+    <div style="font-size:.72rem;color:var(--muted);letter-spacing:1px;text-transform:uppercase;margin:6px 0 2px;">Ejercicios (en orden)</div>
+    <div id="cbExercises"></div>
+    <div style="font-size:.72rem;color:var(--muted);margin-top:12px;">Toca para agregar:</div>
+    <div class="cb-picker" id="cbPicker"></div>
+    <div style="display:flex;gap:8px;">
+      <input type="text" id="cbCustomEx" placeholder="Otro ejercicio..." style="flex:1;" onkeydown="if(event.key==='Enter')addCircuitCustomExercise()">
+      <button class="icon-btn" style="width:42px;height:40px;" onclick="addCircuitCustomExercise()">＋</button>
+    </div>
+    <div id="cbEstimate" style="font-size:.82rem;color:var(--accent);font-weight:700;margin:6px 0 12px;"></div>
+    <button class="sheet-btn" onclick="saveCircuit()">Guardar circuito</button>
+    <button class="sheet-btn hidden" id="cbDelete" style="margin-top:8px;background:none;color:var(--danger);border:1px solid var(--danger);" onclick="deleteCircuit()">🗑 Eliminar circuito</button>
+  </div>
+</div>
+
 <!-- MOVILIDAD: ASISTENTE DE TESTS -->
 <div class="sheet-overlay" id="mobTestOverlay">
   <div class="sheet">
@@ -566,11 +619,11 @@
     <div id="mobPlayerNext" style="text-align:center;font-size:.76rem;color:var(--muted);margin-top:14px;"></div>
   </div>
   <div id="mobPlayerDone" class="hidden" style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:10px;">
-    <div style="font-size:3.5rem;">🧘</div>
-    <div style="font-family:'Bebas Neue',sans-serif;font-size:2rem;color:var(--accent);">¡Rutina completada!</div>
+    <div id="mobDoneIcon" style="font-size:3.5rem;">🧘</div>
+    <div id="mobDoneTitle" style="font-family:'Bebas Neue',sans-serif;font-size:2rem;color:var(--accent);">¡Rutina completada!</div>
     <div id="mobDoneSummary" style="font-size:.86rem;color:var(--muted);"></div>
     <div id="mobDoneStatus" style="font-size:.82rem;margin-top:6px;"></div>
-    <button id="mobDoneRetry" class="sheet-btn hidden" style="max-width:260px;" onclick="saveMobilitySession()">Reintentar guardado</button>
+    <button id="mobDoneRetry" class="sheet-btn hidden" style="max-width:260px;" onclick="saveGuidedSession()">Reintentar guardado</button>
     <button class="sheet-btn" style="max-width:260px;background:var(--surface);color:var(--text);border:1px solid var(--border);margin-top:6px;" onclick="closeMobilityPlayer()">Cerrar</button>
   </div>
 </div>
@@ -688,6 +741,7 @@ function switchTab(name){
   if(name === 'calendario') renderCalendar();
   if(name === 'suplementos') loadSupplements();
   if(name === 'movilidad') renderMobility();
+  if(name === 'circuitos') renderCircuits();
 }
 
 // ═══════════════════════════════════════════
@@ -796,7 +850,7 @@ async function loadProgressChart(){
 // DAYS + EXERCISES (estado local, sincronizado con Supabase)
 // ═══════════════════════════════════════════
 let DAYS = []; // [{id, name, day_type, sort_order, exercises:[...], doneToday:bool}]
-const DAY_TYPE_ICON = { gym:'🏋️', football:'⚽', rest:'🚶', custom:'✨', mobility:'🧘' };
+const DAY_TYPE_ICON = { gym:'🏋️', football:'⚽', rest:'🚶', custom:'✨', mobility:'🧘', circuit:'⚡' };
 
 async function loadDays(){
   const { data: days, error } = await sb.from('days').select('*').eq('user_id', currentUser.id).order('sort_order');
@@ -2341,82 +2395,105 @@ function openMobTestHistory(key){
 }
 function closeMobTestHistory(){ document.getElementById('mobTestHistOverlay').classList.remove('show'); }
 
-// ── REPRODUCTOR ──
-let mobState = null, mobInterval = null, mobWakeLock = null;
+// ── REPRODUCTOR GUIADO (movilidad y circuitos) ──
+// pasos: { kind:'prep'|'rest'|'work', sec, ...ejercicio }. En prep/rest se muestra el próximo ejercicio.
+let guided = null, guidedInterval = null, guidedWakeLock = null;
+
+function buildMobilityPlayerSteps(routine){
+  const steps = [];
+  mobilitySteps(routine).forEach((p, i, all) => {
+    const sameExercise = i > 0 && all[i-1].key === p.key;
+    steps.push({ kind:'prep', sec: sameExercise ? 3 : MOB_PREP_SEC });
+    steps.push({ kind:'work', sec:p.sec, name:p.name, cue:p.cue, dbId:p.dbId, chip:p.side, badge:'MANTÉN' });
+  });
+  return steps;
+}
+async function startGuided(cfg){
+  getAudioCtx(); // desbloquea el audio en iOS al iniciar desde un toque
+  await loadExDb();
+  guided = { ...cfg, idx:0, remaining: cfg.steps[0].sec, running:true, startedAt: Date.now(),
+    totalWork: cfg.steps.filter(s => s.kind === 'work').length };
+  document.getElementById('mobPlayerMain').classList.remove('hidden');
+  document.getElementById('mobPlayerDone').classList.add('hidden');
+  document.getElementById('mobPlayerOverlay').classList.add('show');
+  try{ if(navigator.wakeLock) guidedWakeLock = await navigator.wakeLock.request('screen'); }catch(e){}
+  updateGuidedUI();
+  clearInterval(guidedInterval);
+  guidedInterval = setInterval(tickGuided, 1000);
+}
 async function startMobilityRoutine(){
   const r = MOBILITY_ROUTINES.find(x => x.id === mobSelectedId);
   if(!r) return;
   closeMobilitySheet();
-  getAudioCtx(); // desbloquea el audio en iOS al iniciar desde un toque
-  await loadExDb();
-  mobState = { routine:r, steps: mobilitySteps(r), idx:0, phase:'prep', remaining:MOB_PREP_SEC, running:true, startedAt: Date.now() };
-  document.getElementById('mobPlayerMain').classList.remove('hidden');
-  document.getElementById('mobPlayerDone').classList.add('hidden');
-  document.getElementById('mobPlayerOverlay').classList.add('show');
-  try{ if(navigator.wakeLock) mobWakeLock = await navigator.wakeLock.request('screen'); }catch(e){}
-  updateMobilityUI();
-  clearInterval(mobInterval);
-  mobInterval = setInterval(tickMobility, 1000);
+  await startGuided({ kind:'mobility', icon:r.icon, title:r.name, steps: buildMobilityPlayerSteps(r),
+    notes: min => `Movilidad · ${r.name} — ${min} min`, dayType:'mobility', summary:`${r.poses.length} ejercicios` });
 }
-function tickMobility(){
-  const s = mobState;
-  if(!s || !s.running) return;
-  s.remaining--;
-  if(s.phase === 'hold' && s.remaining > 0 && s.remaining <= 3) playBeep(660, 0.08);
-  if(s.remaining <= 0){
-    if(s.phase === 'prep'){
-      s.phase = 'hold';
-      s.remaining = s.steps[s.idx].sec;
-      playBeep(880, 0.15);
-    } else {
-      goToMobilityStep(s.idx + 1);
-      return;
-    }
+function guidedNextWorkIdx(from){
+  for(let i = from; i < guided.steps.length; i++) if(guided.steps[i].kind === 'work') return i;
+  return -1;
+}
+function tickGuided(){
+  const g = guided;
+  if(!g || !g.running) return;
+  g.remaining--;
+  if(g.remaining > 0 && g.remaining <= 3) playBeep(660, 0.08);
+  if(g.remaining <= 0){ goToGuidedStep(g.idx + 1); return; }
+  updateGuidedUI();
+}
+function goToGuidedStep(idx){
+  const g = guided;
+  if(!g) return;
+  if(idx >= g.steps.length){ finishGuided(); return; }
+  g.idx = Math.max(0, idx);
+  g.remaining = g.steps[g.idx].sec;
+  if(g.steps[g.idx].kind === 'work') playBeep(880, 0.25);
+  else playRestEndSound();
+  updateGuidedUI();
+}
+// saltar va directo al próximo ejercicio; retroceder vuelve al anterior
+function mobilityNext(){
+  if(!guided) return;
+  const cur = guided.steps[guided.idx];
+  const next = guidedNextWorkIdx(guided.idx + (cur.kind === 'work' ? 1 : 0));
+  if(next === -1){ finishGuided(); return; }
+  goToGuidedStep(next);
+}
+function mobilityPrev(){
+  if(!guided) return;
+  for(let i = guided.idx - 1; i >= 0; i--){
+    if(guided.steps[i].kind === 'work'){ goToGuidedStep(i); return; }
   }
-  updateMobilityUI();
+  goToGuidedStep(0);
 }
-function goToMobilityStep(idx){
-  const s = mobState;
-  if(!s) return;
-  if(idx >= s.steps.length){ finishMobilityRoutine(); return; }
-  s.idx = Math.max(0, idx);
-  // si el siguiente es el otro lado del mismo ejercicio, no hace falta tanta preparación
-  const prev = s.steps[s.idx - 1];
-  const sameExercise = prev && prev.key === s.steps[s.idx].key;
-  s.phase = 'prep';
-  s.remaining = sameExercise ? 3 : MOB_PREP_SEC;
-  playRestEndSound();
-  updateMobilityUI();
-}
-function mobilityPrev(){ if(mobState) goToMobilityStep(mobState.idx - 1); }
-function mobilityNext(){ if(mobState) goToMobilityStep(mobState.idx + 1); }
 function mobilityToggle(){
-  if(!mobState) return;
-  mobState.running = !mobState.running;
-  updateMobilityUI();
+  if(!guided) return;
+  guided.running = !guided.running;
+  updateGuidedUI();
 }
-function updateMobilityUI(){
-  const s = mobState;
-  const step = s.steps[s.idx];
-  const next = s.steps[s.idx + 1];
-  document.getElementById('mobPlayerRoutine').textContent = `${s.routine.icon} ${s.routine.name}`;
-  document.getElementById('mobPlayerProgress').style.width = `${(s.idx / s.steps.length) * 100}%`;
-  document.getElementById('mobPlayerCount').textContent = `${s.idx + 1} / ${s.steps.length}`;
-  document.getElementById('mobPlayerName').textContent = step.name;
-  const sideEl = document.getElementById('mobPlayerSide');
-  sideEl.textContent = step.side || '';
-  sideEl.classList.toggle('hidden', !step.side);
+function updateGuidedUI(){
+  const g = guided;
+  const step = g.steps[g.idx];
+  const isWork = step.kind === 'work';
+  const showIdx = isWork ? g.idx : guidedNextWorkIdx(g.idx);
+  const show = g.steps[showIdx] || step;
+  const workDone = g.steps.slice(0, g.idx).filter(s => s.kind === 'work').length;
+  document.getElementById('mobPlayerRoutine').textContent = `${g.icon} ${g.title}`;
+  document.getElementById('mobPlayerProgress').style.width = `${(workDone / g.totalWork) * 100}%`;
+  document.getElementById('mobPlayerCount').textContent = `${Math.min(workDone + 1, g.totalWork)} / ${g.totalWork}`;
+  document.getElementById('mobPlayerName').textContent = (isWork ? '' : 'Sigue: ') + (show.name || '');
+  const chipEl = document.getElementById('mobPlayerSide');
+  chipEl.textContent = show.chip || '';
+  chipEl.classList.toggle('hidden', !show.chip);
   const badge = document.getElementById('mobPlayerBadge');
-  badge.textContent = s.phase === 'prep' ? 'PREPÁRATE' : 'MANTÉN';
-  badge.className = 'timer-badge ' + (s.phase === 'prep' ? 'rest' : 'work');
-  document.getElementById('mobPlayerDigits').textContent = s.remaining;
-  const total = s.phase === 'prep' ? MOB_PREP_SEC : step.sec;
+  badge.textContent = isWork ? (step.badge || '¡DALE!') : (step.label || (step.kind === 'prep' ? 'PREPÁRATE' : 'DESCANSO'));
+  badge.className = 'timer-badge ' + (isWork ? 'work' : 'rest');
+  document.getElementById('mobPlayerDigits').textContent = g.remaining;
   const ring = document.getElementById('mobRingFill');
-  ring.setAttribute('stroke', s.phase === 'prep' ? 'var(--accent3)' : 'var(--accent)');
-  ring.style.strokeDashoffset = CIRC * (1 - Math.min(s.remaining / total, 1));
-  document.getElementById('mobPlayerCue').textContent = step.cue;
+  ring.setAttribute('stroke', isWork ? 'var(--accent)' : 'var(--accent3)');
+  ring.style.strokeDashoffset = CIRC * (1 - Math.min(g.remaining / step.sec, 1));
+  document.getElementById('mobPlayerCue').textContent = show.cue || '';
   const gifEl = document.getElementById('mobPlayerGif');
-  const item = step.dbId && EXDB ? EXDB.find(e => e.id === step.dbId) : null;
+  const item = show.dbId && EXDB ? EXDB.find(e => e.id === show.dbId) : null;
   if(item){
     if(gifEl.dataset.src !== item.gif_url){ gifEl.src = item.gif_url; gifEl.dataset.src = item.gif_url; }
     gifEl.classList.remove('hidden');
@@ -2424,47 +2501,50 @@ function updateMobilityUI(){
     gifEl.classList.add('hidden');
     gifEl.dataset.src = '';
   }
-  document.getElementById('mobPlayerNext').textContent = next ? `Después: ${next.name}${next.side ? ' · ' + next.side.toLowerCase() : ''}` : 'Último ejercicio';
-  document.getElementById('mobPlayPause').textContent = s.running ? '⏸' : '▶';
+  const nextIdx = guidedNextWorkIdx(showIdx + 1);
+  const next = nextIdx === -1 ? null : g.steps[nextIdx];
+  document.getElementById('mobPlayerNext').textContent = next ? `Después: ${next.name}${next.chip && next.chip !== show.chip ? ' · ' + next.chip.toLowerCase() : ''}` : 'Último ejercicio';
+  document.getElementById('mobPlayPause').textContent = g.running ? '⏸' : '▶';
 }
-function releaseMobilityWakeLock(){
-  try{ if(mobWakeLock) mobWakeLock.release(); }catch(e){}
-  mobWakeLock = null;
+function releaseGuidedWakeLock(){
+  try{ if(guidedWakeLock) guidedWakeLock.release(); }catch(e){}
+  guidedWakeLock = null;
 }
 function closeMobilityPlayer(){
-  if(mobState && !document.getElementById('mobPlayerMain').classList.contains('hidden') && mobState.idx > 0){
-    if(!confirm('¿Salir de la rutina? No se va a registrar.')) return;
+  if(guided && !document.getElementById('mobPlayerMain').classList.contains('hidden') && guided.idx > 1){
+    if(!confirm('¿Salir? No se va a registrar.')) return;
   }
-  clearInterval(mobInterval);
-  mobState = null;
-  releaseMobilityWakeLock();
+  clearInterval(guidedInterval);
+  guided = null;
+  releaseGuidedWakeLock();
   document.getElementById('mobPlayerOverlay').classList.remove('show');
 }
-async function finishMobilityRoutine(){
-  clearInterval(mobInterval);
-  releaseMobilityWakeLock();
+async function finishGuided(){
+  clearInterval(guidedInterval);
+  releaseGuidedWakeLock();
   playSessionDoneSound();
-  const s = mobState;
-  const mins = Math.max(1, Math.round((Date.now() - s.startedAt) / 60000));
-  s.durationMin = mins;
+  const g = guided;
+  g.durationMin = Math.max(1, Math.round((Date.now() - g.startedAt) / 60000));
   document.getElementById('mobPlayerMain').classList.add('hidden');
   document.getElementById('mobPlayerDone').classList.remove('hidden');
   document.getElementById('mobPlayerCount').textContent = '';
-  document.getElementById('mobDoneSummary').textContent = `${s.routine.name} · ${mins} min · ${s.routine.poses.length} ejercicios`;
-  await saveMobilitySession();
+  document.getElementById('mobDoneIcon').textContent = g.kind === 'circuit' ? '🔥' : '🧘';
+  document.getElementById('mobDoneTitle').textContent = g.kind === 'circuit' ? '¡Circuito completado!' : '¡Rutina completada!';
+  document.getElementById('mobDoneSummary').textContent = `${g.title} · ${g.durationMin} min · ${g.summary}`;
+  await saveGuidedSession();
 }
-async function saveMobilitySession(){
-  const s = mobState;
-  if(!s) return;
+async function saveGuidedSession(){
+  const g = guided;
+  if(!g) return;
   const status = document.getElementById('mobDoneStatus');
   const retry = document.getElementById('mobDoneRetry');
   status.textContent = 'Guardando…';
   retry.classList.add('hidden');
   const payload = { user_id: currentUser.id, day_id: null, session_date: localDateStr(), completed: true,
-    day_type: 'mobility', notes: `Movilidad · ${s.routine.name} — ${s.durationMin} min` };
+    day_type: g.dayType, notes: g.notes(g.durationMin) };
   let { error } = await sb.from('sessions').insert(payload);
-  // si la base todavía no acepta el tipo 'mobility', se guarda como 'custom' (las notas igual la identifican)
-  if(error && (error.code === '23514' || /check constraint|invalid input value/i.test(error.message || ''))){
+  // si la base todavía no acepta ese tipo de sesión, se guarda como 'custom' (las notas igual la identifican)
+  if(error && (error.code === '23514' || error.code === '22P02' || /check constraint|invalid input value/i.test(error.message || ''))){
     ({ error } = await sb.from('sessions').insert({ ...payload, day_type:'custom' }));
   }
   if(error){
@@ -2473,8 +2553,261 @@ async function saveMobilitySession(){
     retry.classList.remove('hidden');
     return;
   }
-  status.textContent = '✅ Guardada en tu calendario';
-  renderMobility();
+  status.textContent = '✅ Guardado en tu calendario';
+  if(g.kind === 'circuit') renderCircuits(); else renderMobility();
+}
+
+// ═══════════════════════════════════════════
+// CIRCUITOS (varios ejercicios seguidos, repetidos por rondas)
+// ═══════════════════════════════════════════
+const CIRCUIT_EXERCISES = {
+  jumping_jacks: { name:'Jumping jacks', dbId:'3220', cue:'Salta abriendo piernas y brazos sobre la cabeza y vuelve a cerrar. Ritmo constante, aterriza suave.' },
+  squats: { name:'Sentadillas', cue:'Pies al ancho de hombros, baja con la cadera atrás hasta que los muslos queden paralelos y sube apretando glúteos.' },
+  pushups: { name:'Flexiones', dbId:'0662', cue:'Cuerpo en línea recta, baja el pecho cerca del suelo y empuja. Si cuesta, apoya las rodillas.' },
+  climbers: { name:'Escaladores', dbId:'0630', cue:'En plancha alta, lleva las rodillas al pecho alternando rápido. Cadera baja y hombros sobre las manos.' },
+  burpees: { name:'Burpees', dbId:'1160', cue:'Baja a cuclillas, manos al suelo, salta atrás a plancha, vuelve y salta arriba con los brazos estirados.' },
+  jump_squat: { name:'Sentadilla con salto', dbId:'0514', cue:'Baja a sentadilla y salta explosivo. Aterriza suave con rodillas flexionadas y encadena la siguiente.' },
+  lunges: { name:'Zancadas alternas', dbId:'3470', cue:'Paso largo adelante, baja hasta que la rodilla de atrás casi toque el suelo y vuelve. Alterna piernas.' },
+  lunge_jump: { name:'Zancada con salto', dbId:'3582', cue:'Desde zancada, salta y cambia de pierna en el aire. Aterriza controlado y baja de nuevo.' },
+  skaters: { name:'Saltos de patinador', dbId:'3361', cue:'Salta de lado a lado aterrizando en un pie, la otra pierna cruza atrás. Brazos acompañan el movimiento.' },
+  high_knees: { name:'Rodillas arriba', cue:'Trota en el lugar subiendo las rodillas a la altura de la cadera. Brazos rápidos, en la punta de los pies.' },
+  plank: { name:'Plancha', cue:'Antebrazos en el suelo, cuerpo en línea recta de cabeza a talones. Aprieta abdomen y glúteos, sin hundir la cadera.' },
+  plank_tap: { name:'Plancha con toque de hombro', dbId:'3239', cue:'En plancha alta, toca el hombro contrario alternando manos sin balancear la cadera.' },
+  bicycle: { name:'Bicicleta abdominal', cue:'Boca arriba, lleva el codo a la rodilla contraria mientras estiras la otra pierna. Alterna sin tirar del cuello.' },
+  dead_bug: { name:'Dead bug', dbId:'0276', cue:'Boca arriba con brazos y rodillas arriba, estira brazo y pierna contrarios sin despegar la espalda baja.' },
+  crunch: { name:'Abdominales', dbId:'0274', cue:'Rodillas dobladas, despega los hombros del suelo apretando el abdomen. Mirada al techo.' },
+  russian_twist: { name:'Giro ruso', dbId:'0687', cue:'Sentado con el tronco inclinado y pies arriba o apoyados, gira llevando las manos a cada lado.' },
+  flutter: { name:'Patadas de tijera', dbId:'0459', cue:'Boca arriba, piernas estiradas apenas sobre el suelo, muévelas arriba y abajo alternando. Espalda baja pegada.' },
+  glute_bridge: { name:'Puente de glúteo', dbId:'3013', cue:'Boca arriba con rodillas dobladas, sube la cadera apretando glúteos y baja controlado.' },
+  chair_dips: { name:'Fondos en silla', dbId:'0129', cue:'Manos en el borde de una silla, baja doblando codos hacia atrás y empuja para subir.' },
+  bear_crawl: { name:'Caminata de oso', dbId:'3360', cue:'En cuatro apoyos con rodillas levantadas, avanza y retrocede moviendo mano y pie contrarios.' },
+  star_jump: { name:'Salto estrella', dbId:'3223', cue:'Desde cuclillas, salta abriendo brazos y piernas en forma de estrella. Aterriza suave.' },
+  jump_rope: { name:'Saltar la cuerda', dbId:'2612', cue:'Saltos cortos en la punta de los pies, codos pegados y giro desde las muñecas.' },
+  goblet_squat: { name:'Sentadilla goblet', dbId:'1760', cue:'Mancuerna o pesa rusa pegada al pecho, baja profundo con el pecho alto y sube empujando el suelo.' },
+  push_press: { name:'Press con impulso', dbId:'1700', cue:'Mancuernas en los hombros, flexiona un poco las rodillas y usa ese impulso para empujar arriba.' },
+  renegade_row: { name:'Remo renegado', dbId:'0521', cue:'En plancha sobre mancuernas, rema una hacia la cadera sin girar el tronco. Alterna.' },
+  kb_swing: { name:'Swing con pesa rusa', dbId:'0549', cue:'Bisagra de cadera, la pesa entre las piernas y empuja con la cadera hasta la altura del pecho. Brazos relajados.' },
+};
+const CIRCUIT_PRESETS = [
+  { id:'clasico', icon:'🏠', name:'Clásico en casa', desc:'Cardio y fuerza sin equipo. El de siempre.',
+    work:40, rest:20, rounds:4, roundRest:60, exercises:['jumping_jacks','squats','pushups','climbers'] },
+  { id:'futbol', icon:'⚽', name:'Fútbol: potencia de piernas', desc:'Saltos y cambios de apoyo para piernas explosivas.',
+    work:30, rest:30, rounds:4, roundRest:60, exercises:['jump_squat','lunge_jump','skaters','high_knees','plank'] },
+  { id:'core', icon:'🎯', name:'Core express', desc:'Abdomen y zona media, corto e intenso.',
+    work:30, rest:15, rounds:3, roundRest:30, exercises:['plank','bicycle','dead_bug','russian_twist','flutter'] },
+  { id:'tabata', icon:'🔥', name:'Tabata cardio', desc:'Intervalos cortos a máxima intensidad.',
+    work:20, rest:10, rounds:4, roundRest:60, exercises:['burpees','climbers','jumping_jacks','high_knees'] },
+  { id:'pesas', icon:'🏋️', name:'Full body con pesas', desc:'Con mancuernas o pesa rusa, todo el cuerpo.',
+    work:40, rest:20, rounds:3, roundRest:90, exercises:['goblet_squat','push_press','renegade_row','lunges','kb_swing'] },
+];
+const CIRCUIT_PREP_SEC = 10;
+
+function circuitExercise(item){
+  // item: clave de la biblioteca, o { name } escrito a mano
+  if(typeof item === 'string') return CIRCUIT_EXERCISES[item] || { name:item };
+  return item.key && CIRCUIT_EXERCISES[item.key] ? CIRCUIT_EXERCISES[item.key] : { name: item.name, cue: item.cue || '' };
+}
+function buildCircuitSteps(c){
+  const exs = c.exercises.map(circuitExercise);
+  const steps = [{ kind:'prep', sec:CIRCUIT_PREP_SEC }];
+  for(let r = 1; r <= c.rounds; r++){
+    exs.forEach((ex, i) => {
+      steps.push({ kind:'work', sec:c.work, name:ex.name, cue:ex.cue, dbId:ex.dbId, chip:`Ronda ${r} de ${c.rounds}`, badge:'¡DALE!' });
+      const lastOfRound = i === exs.length - 1;
+      if(lastOfRound && r === c.rounds) return;
+      const restSec = lastOfRound ? c.roundRest : c.rest;
+      if(restSec > 0) steps.push({ kind:'rest', sec:restSec, label: lastOfRound ? `DESCANSO · TERMINASTE LA RONDA ${r}` : 'DESCANSO' });
+    });
+  }
+  return steps;
+}
+function circuitMinutes(c){
+  return Math.max(1, Math.round(buildCircuitSteps(c).reduce((a, s) => a + s.sec, 0) / 60));
+}
+function isCircuitSession(s){ return s.day_type === 'circuit' || (s.notes || '').startsWith('Circuito · '); }
+
+let MY_CIRCUITS = null;          // circuitos del usuario; null = tabla no disponible
+let circuitsTableMissing = false;
+function findCircuit(id){
+  return CIRCUIT_PRESETS.find(c => c.id === id) || (MY_CIRCUITS || []).find(c => c.id === id);
+}
+async function loadMyCircuits(){
+  const { data, error } = await sb.from('circuits').select('*').eq('user_id', currentUser.id).order('created_at');
+  circuitsTableMissing = !!error;
+  if(error){ console.error(error); MY_CIRCUITS = null; return; }
+  MY_CIRCUITS = (data || []).map(row => ({ id: row.id, own:true, icon: row.icon || '⚡', name: row.name, desc:'', ...(row.config || {}) }));
+}
+function circuitCard(c){
+  return `<div class="mob-card" style="border-left-color:${c.own ? 'var(--accent3)' : '#f97316'};" onclick="openCircuit('${c.id}')">
+    <div class="mob-icon">${c.icon}</div>
+    <div style="flex:1;min-width:0;">
+      <div class="mob-name">${escHtml(c.name)}</div>
+      <div class="mob-desc">${escHtml(c.exercises.map(e => circuitExercise(e).name).join(' · '))}</div>
+      <div class="mob-meta">~${circuitMinutes(c)} min · ${c.rounds} ronda${c.rounds===1?'':'s'} · ${c.work}s / ${c.rest}s</div>
+    </div>
+    <div style="color:var(--muted);font-size:1.2rem;">›</div>
+  </div>`;
+}
+async function renderCircuits(){
+  document.getElementById('circuitPresetList').innerHTML = CIRCUIT_PRESETS.map(circuitCard).join('');
+  await loadMyCircuits();
+  const mine = document.getElementById('myCircuitList');
+  if(circuitsTableMissing){
+    mine.innerHTML = `<div class="day-card" style="padding:14px;font-size:.8rem;color:var(--muted);">Crear circuitos propios todavía no está activado en la base de datos.</div>`;
+  } else {
+    mine.innerHTML = (MY_CIRCUITS.length ? MY_CIRCUITS.map(circuitCard).join('') : '') +
+      `<button class="add-btn" onclick="openCircuitBuilder()">＋ Crear mi circuito</button>`;
+  }
+  // cuántos circuitos esta semana
+  const monday = new Date();
+  monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
+  const { data: sessions } = await sb.from('sessions').select('*').eq('user_id', currentUser.id).gte('session_date', localDateStr(monday)).lte('session_date', localDateStr());
+  const count = (sessions || []).filter(isCircuitSession).length;
+  document.getElementById('circuitWeekStat').textContent = count ? `🔥 ${count} circuito${count===1?'':'s'} esta semana` : 'Elige un circuito y dale.';
+}
+
+// ── DETALLE ──
+let circuitSelectedId = null;
+async function openCircuit(id){
+  const c = findCircuit(id);
+  if(!c) return;
+  circuitSelectedId = id;
+  document.getElementById('circuitSheetTitle').textContent = `${c.icon} ${c.name}`;
+  document.getElementById('circuitSheetMeta').innerHTML = `
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:10px;">
+      ${[[`${c.work}s`,'Trabajo'],[`${c.rest}s`,'Descanso'],[c.rounds,'Rondas'],[`~${circuitMinutes(c)}′`,'Total']].map(([v,l]) =>
+        `<div style="background:var(--surface);border-radius:10px;padding:8px 4px;text-align:center;"><div style="font-family:'Bebas Neue',sans-serif;font-size:1.3rem;">${v}</div><div style="font-size:.62rem;color:var(--muted);text-transform:uppercase;">${l}</div></div>`).join('')}
+    </div>
+    <div style="font-size:.76rem;color:var(--muted);">Haces todos los ejercicios seguidos y eso es 1 ronda. Descansas ${c.roundRest}s y repites.</div>`;
+  document.getElementById('circuitSheetList').innerHTML = c.exercises.map((item, i) => {
+    const ex = circuitExercise(item);
+    return `<div class="mob-pose-row">
+      <div class="mob-pose-num">${i+1}</div>
+      <div class="mob-thumb" data-dbid="${ex.dbId || ''}">⚡</div>
+      <div style="flex:1;font-size:.85rem;font-weight:600;">${escHtml(ex.name)}</div>
+      <div class="ex-meta">${c.work}s</div>
+    </div>`;
+  }).join('');
+  document.getElementById('circuitEditBtn').textContent = c.own ? '✎ Editar' : '✎ Copiar y ajustar';
+  document.getElementById('circuitEditBtn').classList.toggle('hidden', circuitsTableMissing);
+  document.getElementById('circuitSheetOverlay').classList.add('show');
+  await loadExDb();
+  document.querySelectorAll('#circuitSheetList .mob-thumb[data-dbid]').forEach(el => {
+    const item = el.dataset.dbid && EXDB.find(e => e.id === el.dataset.dbid);
+    if(item) el.innerHTML = `<img src="${item.image}" loading="lazy" onerror="this.remove()">`;
+  });
+}
+function closeCircuitSheet(){ document.getElementById('circuitSheetOverlay').classList.remove('show'); }
+async function startCircuit(){
+  const c = findCircuit(circuitSelectedId);
+  if(!c) return;
+  closeCircuitSheet();
+  await startGuided({ kind:'circuit', icon:c.icon, title:c.name, steps: buildCircuitSteps(c),
+    notes: min => `Circuito · ${c.name} — ${min} min, ${c.rounds} rondas`, dayType:'circuit',
+    summary:`${c.rounds} rondas · ${c.exercises.length} ejercicios` });
+}
+
+// ── CREAR / EDITAR ──
+let circuitDraft = null; // { id|null, icon, name, work, rest, rounds, roundRest, exercises:[...] }
+function openCircuitBuilder(fromId){
+  const base = fromId ? findCircuit(fromId) : null;
+  circuitDraft = base
+    ? { id: base.own ? base.id : null, icon: base.icon, name: base.own ? base.name : `${base.name} (mío)`, work: base.work, rest: base.rest,
+        rounds: base.rounds, roundRest: base.roundRest, exercises: base.exercises.map(e => typeof e === 'string' ? { key:e } : { ...e }) }
+    : { id:null, icon:'⚡', name:'', work:40, rest:20, rounds:3, roundRest:60, exercises:[] };
+  closeCircuitSheet();
+  renderCircuitBuilder();
+  document.getElementById('circuitBuilderOverlay').classList.add('show');
+}
+function closeCircuitBuilder(){ document.getElementById('circuitBuilderOverlay').classList.remove('show'); circuitDraft = null; }
+const CB_SETTINGS = [
+  ['work','Trabajo','s',5,10,300], ['rest','Descanso','s',5,0,180], ['rounds','Rondas','',1,1,12], ['roundRest','Descanso entre rondas','s',15,0,300],
+];
+function renderCircuitBuilder(){
+  const d = circuitDraft;
+  document.getElementById('cbTitle').textContent = d.id ? '✎ Editar circuito' : '＋ Nuevo circuito';
+  document.getElementById('cbName').value = d.name;
+  document.getElementById('cbIcon').value = d.icon;
+  document.getElementById('cbSettings').innerHTML = CB_SETTINGS.map(([k, label, unit]) => `
+    <div style="display:flex;align-items:center;gap:8px;padding:6px 0;">
+      <div style="flex:1;font-size:.82rem;">${label}</div>
+      <button class="adj-btn" onclick="adjustCircuitSetting('${k}',-1)">−</button>
+      <div style="min-width:52px;text-align:center;font-family:'Bebas Neue',sans-serif;font-size:1.2rem;">${d[k]}${unit}</div>
+      <button class="adj-btn" onclick="adjustCircuitSetting('${k}',1)">+</button>
+    </div>`).join('');
+  document.getElementById('cbExercises').innerHTML = d.exercises.length
+    ? d.exercises.map((item, i) => `
+      <div class="mob-pose-row">
+        <div class="mob-pose-num">${i+1}</div>
+        <div style="flex:1;font-size:.85rem;font-weight:600;">${escHtml(circuitExercise(item).name)}</div>
+        <button class="icon-btn" style="width:28px;height:28px;${i===0?'opacity:.3;':''}" ${i===0?'disabled':''} onclick="moveCircuitExercise(${i},-1)">▲</button>
+        <button class="icon-btn" style="width:28px;height:28px;${i===d.exercises.length-1?'opacity:.3;':''}" ${i===d.exercises.length-1?'disabled':''} onclick="moveCircuitExercise(${i},1)">▼</button>
+        <button class="icon-btn" style="width:28px;height:28px;" onclick="removeCircuitExercise(${i})">✕</button>
+      </div>`).join('')
+    : `<div style="font-size:.8rem;color:var(--muted);padding:8px 0;">Agrega al menos 2 ejercicios.</div>`;
+  document.getElementById('cbPicker').innerHTML = Object.entries(CIRCUIT_EXERCISES).map(([k, ex]) =>
+    `<button onclick="addCircuitExercise('${k}')">${ex.name}</button>`).join('');
+  document.getElementById('cbEstimate').textContent = d.exercises.length ? `⏱ ~${circuitMinutes(d)} min en total` : '';
+  document.getElementById('cbDelete').classList.toggle('hidden', !d.id);
+}
+function adjustCircuitSetting(k, dir){
+  const [, , , step, min, max] = CB_SETTINGS.find(s => s[0] === k);
+  circuitDraft[k] = Math.max(min, Math.min(max, circuitDraft[k] + dir * step));
+  syncCircuitDraftText();
+  renderCircuitBuilder();
+}
+function syncCircuitDraftText(){
+  if(!circuitDraft) return;
+  circuitDraft.name = document.getElementById('cbName').value;
+  circuitDraft.icon = document.getElementById('cbIcon').value || '⚡';
+}
+function addCircuitExercise(key){
+  syncCircuitDraftText();
+  circuitDraft.exercises.push({ key });
+  renderCircuitBuilder();
+}
+function addCircuitCustomExercise(){
+  const input = document.getElementById('cbCustomEx');
+  const name = input.value.trim();
+  if(!name) return;
+  syncCircuitDraftText();
+  circuitDraft.exercises.push({ name });
+  input.value = '';
+  renderCircuitBuilder();
+}
+function removeCircuitExercise(i){ syncCircuitDraftText(); circuitDraft.exercises.splice(i, 1); renderCircuitBuilder(); }
+function moveCircuitExercise(i, dir){
+  syncCircuitDraftText();
+  const ex = circuitDraft.exercises;
+  const j = i + dir;
+  if(j < 0 || j >= ex.length) return;
+  [ex[i], ex[j]] = [ex[j], ex[i]];
+  renderCircuitBuilder();
+}
+async function saveCircuit(){
+  syncCircuitDraftText();
+  const d = circuitDraft;
+  if(!d.name.trim()){ showToast('⚠️ Ponle un nombre al circuito', true); return; }
+  if(d.exercises.length < 2){ showToast('⚠️ Agrega al menos 2 ejercicios', true); return; }
+  const row = { name: d.name.trim(), icon: d.icon,
+    config: { work:d.work, rest:d.rest, rounds:d.rounds, roundRest:d.roundRest, exercises:d.exercises } };
+  const { error } = d.id
+    ? await sb.from('circuits').update(row).eq('id', d.id)
+    : await sb.from('circuits').insert({ ...row, user_id: currentUser.id });
+  if(error){ showSaveError(error); return; }
+  closeCircuitBuilder();
+  showToast('✅ Circuito guardado');
+  await renderCircuits();
+}
+async function deleteCircuit(){
+  const d = circuitDraft;
+  if(!d || !d.id) return;
+  if(!confirm(`¿Eliminar el circuito "${d.name}"?`)) return;
+  const { error } = await sb.from('circuits').delete().eq('id', d.id);
+  if(error){ showSaveError(error); return; }
+  closeCircuitBuilder();
+  showToast('🗑 Circuito eliminado');
+  await renderCircuits();
 }
 
 // ═══════════════════════════════════════════
@@ -2690,8 +3023,8 @@ function escHtml(str){
 let calCurrentMonth = new Date();
 calCurrentMonth.setDate(1);
 let calSessionsCache = {};
-const CAL_TYPE_COLOR = { gym:'var(--accent)', football:'var(--accent3)', rest:'var(--yellow)', custom:'#a855f7', mobility:'#2dd4bf' };
-function sessionIcon(s){ return isMobilitySession(s) ? '🧘' : (DAY_TYPE_ICON[s.day_type] || '✨'); }
+const CAL_TYPE_COLOR = { gym:'var(--accent)', football:'var(--accent3)', rest:'var(--yellow)', custom:'#a855f7', mobility:'#2dd4bf', circuit:'#f97316' };
+function sessionIcon(s){ return isMobilitySession(s) ? '🧘' : isCircuitSession(s) ? '⚡' : (DAY_TYPE_ICON[s.day_type] || '✨'); }
 function calShiftMonth(delta){
   calCurrentMonth.setMonth(calCurrentMonth.getMonth() + delta);
   renderCalendar();
@@ -2740,7 +3073,7 @@ function getDateStatus(dateStr, weekday, todayStr){
   const sessions = calSessionsCache[dateStr] || [];
   const trainSessions = sessions.filter(s => !isMobilitySession(s));
   const plannedDays = DAYS.filter(d => (d.weekdays||[]).includes(weekday));
-  if(trainSessions.length) return { status:'done', color: CAL_TYPE_COLOR[trainSessions[0].day_type] || '#a855f7' };
+  if(trainSessions.length) return { status:'done', color: isCircuitSession(trainSessions[0]) ? CAL_TYPE_COLOR.circuit : (CAL_TYPE_COLOR[trainSessions[0].day_type] || '#a855f7') };
   if(plannedDays.length){
     if(dateStr < todayStr) return { status:'missed', color:'var(--danger)' };
     return { status:'pending', color: CAL_TYPE_COLOR[plannedDays[0].day_type] || '#a855f7' };
